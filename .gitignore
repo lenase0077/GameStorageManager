@@ -1,2 +1,5 @@
 # Local AI orchestration handoff files.
 /ai-orchestration/**/*.md
+
+# Local build output.
+/build/
