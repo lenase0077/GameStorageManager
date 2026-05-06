@@ -56,10 +56,37 @@ if(Qt6_FOUND)
             Qt6::Concurrent
     )
 
+    set_target_properties(gsm_app PROPERTIES
+        OUTPUT_NAME GameStorageManager
+    )
+
     if(MSVC)
         target_compile_options(gsm_app PRIVATE /W4)
     else()
         target_compile_options(gsm_app PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    if(WIN32)
+        find_program(WINDEPLOYQT_EXECUTABLE
+            NAMES windeployqt
+            HINTS
+                "${Qt6_DIR}/../../../bin"
+                "C:/Qt/6.8.3/mingw_64/bin"
+        )
+
+        if(WINDEPLOYQT_EXECUTABLE)
+            set(GSM_DEPLOY_DIR "${CMAKE_BINARY_DIR}/deploy/GameStorageManager")
+
+            add_custom_target(gsm_app_deploy
+                COMMAND ${CMAKE_COMMAND} -E remove_directory "${GSM_DEPLOY_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory "${GSM_DEPLOY_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:gsm_app>" "${GSM_DEPLOY_DIR}/$<TARGET_FILE_NAME:gsm_app>"
+                COMMAND "${WINDEPLOYQT_EXECUTABLE}" --no-translations --no-system-d3d-compiler --no-opengl-sw "${GSM_DEPLOY_DIR}/$<TARGET_FILE_NAME:gsm_app>"
+                DEPENDS gsm_app
+                COMMENT "Deploying GameStorageManager runtime files"
+                VERBATIM
+            )
+        endif()
     endif()
 endif()
 

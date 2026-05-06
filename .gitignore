@@ -4,6 +4,7 @@
 # Local build output.
 /build/
 /build-*/
+/dist/
 
 # Installer/tool logs.
 /aqtinstall.log
