@@ -33,3 +33,13 @@ add_executable(gsm_cli
 )
 
 target_link_libraries(gsm_cli PRIVATE gsm_core)
+
+enable_testing()
+
+add_executable(gsm_core_tests
+    tests/core_tests.cpp
+)
+
+target_link_libraries(gsm_core_tests PRIVATE gsm_core)
+
+add_test(NAME gsm_core_tests COMMAND gsm_core_tests)
