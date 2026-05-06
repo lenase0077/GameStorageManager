@@ -1,6 +1,7 @@
 #include "system/filesystem/Filesystem.h"
 
 #include <algorithm>
+#include <cctype>
 #include <windows.h>
 
 namespace gsm::system {
@@ -37,6 +38,30 @@ bool fileExists(const Path& path)
 {
     const DWORD attributes = GetFileAttributesA(path.c_str());
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+std::vector<Path> listFilesWithPrefixSuffix(const Path& directory, const std::string& prefix, const std::string& suffix)
+{
+    std::vector<Path> files;
+    const Path normalizedDirectory = normalizePath(directory);
+    const Path searchPath = joinPath(normalizedDirectory, prefix + "*" + suffix);
+
+    WIN32_FIND_DATAA findData;
+    HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
+    if (findHandle == INVALID_HANDLE_VALUE) {
+        return files;
+    }
+
+    do {
+        const bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (!isDirectory) {
+            files.push_back(joinPath(normalizedDirectory, findData.cFileName));
+        }
+    } while (FindNextFileA(findHandle, &findData) != 0);
+
+    FindClose(findHandle);
+    std::sort(files.begin(), files.end());
+    return files;
 }
 
 Path normalizePath(const Path& path)

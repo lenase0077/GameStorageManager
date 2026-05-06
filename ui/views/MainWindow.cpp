@@ -80,6 +80,10 @@ MainWindow::MainWindow(QWidget* parent)
         chooseFolder();
     });
 
+    connect(scanSteamButton_, &QPushButton::clicked, this, [this]() {
+        startSteamScan();
+    });
+
     connect(analyzeButton_, &QPushButton::clicked, this, [this]() {
         if (!selectedFolder_.isEmpty()) {
             startAnalysis(selectedFolder_);
@@ -88,6 +92,10 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(&analysisWatcher_, &QFutureWatcher<gsm::core::GameAnalysis>::finished, this, [this]() {
         finishAnalysis();
+    });
+
+    connect(&steamScanWatcher_, &QFutureWatcher<std::vector<gsm::core::GameEntry>>::finished, this, [this]() {
+        finishSteamScan();
     });
 
     setBusy(false);
@@ -124,6 +132,7 @@ void MainWindow::buildLayout()
     actionLayout->setSpacing(10);
 
     selectFolderButton_ = new QPushButton("Select Folder", actionFrame);
+    scanSteamButton_ = new QPushButton("Scan Steam", actionFrame);
     analyzeButton_ = new QPushButton("Analyze", actionFrame);
     optimizeButton_ = new QPushButton("Optimize", actionFrame);
     restoreButton_ = new QPushButton("Restore", actionFrame);
@@ -134,6 +143,7 @@ void MainWindow::buildLayout()
     restoreButton_->setEnabled(false);
 
     actionLayout->addWidget(selectFolderButton_);
+    actionLayout->addWidget(scanSteamButton_);
     actionLayout->addWidget(analyzeButton_);
     actionLayout->addWidget(optimizeButton_);
     actionLayout->addWidget(restoreButton_);
@@ -277,6 +287,15 @@ void MainWindow::startAnalysis(const QString& folderPath)
     analysisWatcher_.setFuture(analysisController_.analyzeFolder(folderPath));
 }
 
+void MainWindow::startSteamScan()
+{
+    setBusy(true);
+    statusLabel_->setText("Scanning Steam");
+    selectedFolderLabel_->setText("Scanning Steam libraries");
+    gamesTable_->setRowCount(0);
+    steamScanWatcher_.setFuture(analysisController_.scanSteamGames());
+}
+
 void MainWindow::finishAnalysis()
 {
     setBusy(false);
@@ -290,6 +309,15 @@ void MainWindow::finishAnalysis()
 
     showAnalysis(analysis);
     statusLabel_->setText("Ready");
+}
+
+void MainWindow::finishSteamScan()
+{
+    setBusy(false);
+
+    const std::vector<gsm::core::GameEntry> games = steamScanWatcher_.result();
+    showSteamGames(games);
+    statusLabel_->setText(QString("Steam games found: %1").arg(games.size()));
 }
 
 void MainWindow::showAnalysis(const gsm::core::GameAnalysis& analysis)
@@ -322,13 +350,37 @@ void MainWindow::showAnalysis(const gsm::core::GameAnalysis& analysis)
     }
 }
 
+void MainWindow::showSteamGames(const std::vector<gsm::core::GameEntry>& games)
+{
+    gamesTable_->setRowCount(static_cast<int>(games.size()));
+
+    for (int row = 0; row < static_cast<int>(games.size()); ++row) {
+        const gsm::core::GameEntry& game = games[static_cast<std::size_t>(row)];
+        const QStringList values = {
+            QString::fromStdString(game.name),
+            QString::fromStdString(game.installPath),
+            "Not analyzed",
+            "-",
+            "-",
+            "Pending",
+            "-",
+            QString::fromStdString(gsm::core::toString(game.source))
+        };
+
+        for (int column = 0; column < values.size(); ++column) {
+            auto* item = new QTableWidgetItem(values[column]);
+            gamesTable_->setItem(row, column, item);
+        }
+    }
+}
+
 void MainWindow::setBusy(bool busy)
 {
     selectFolderButton_->setEnabled(!busy);
+    scanSteamButton_->setEnabled(!busy);
     analyzeButton_->setEnabled(!busy && !selectedFolder_.isEmpty());
     progressBar_->setRange(busy ? 0 : 0, busy ? 0 : 1);
     progressBar_->setValue(busy ? 0 : 1);
 }
 
 } // namespace gsm::ui
-

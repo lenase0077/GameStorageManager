@@ -1,5 +1,6 @@
 #include "core/analyzer/GameAnalyzer.h"
 #include "core/rules_engine/RecommendationEngine.h"
+#include "core/scanner/SteamScanner.h"
 #include "system/filesystem/Filesystem.h"
 #include "system/process/CompactProcessAdapter.h"
 
@@ -42,6 +43,7 @@ void printUsage()
         << "\n"
         << "Usage:\n"
         << "  gsm_cli analyze <folder>\n"
+        << "  gsm_cli scan-steam\n"
         << "  gsm_cli compact-command <compress|restore> <folder> [xpress4k|xpress8k|xpress16k|lzx]\n";
 }
 
@@ -141,6 +143,22 @@ int printCompactCommand(int argc, char* argv[])
     return 0;
 }
 
+int scanSteam()
+{
+    gsm::core::SteamScanner scanner;
+    const std::vector<gsm::core::GameEntry> games = scanner.scanInstalledGames();
+
+    std::cout << "Steam games found: " << games.size() << "\n";
+
+    for (const gsm::core::GameEntry& game : games) {
+        std::cout << "- [" << game.sourceId << "] " << game.name << "\n";
+        std::cout << "  Library: " << game.libraryPath << "\n";
+        std::cout << "  Path: " << game.installPath << "\n";
+    }
+
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -162,6 +180,10 @@ int main(int argc, char* argv[])
 
     if (command == "compact-command") {
         return printCompactCommand(argc, argv);
+    }
+
+    if (command == "scan-steam") {
+        return scanSteam();
     }
 
     printUsage();

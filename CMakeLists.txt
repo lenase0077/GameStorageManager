@@ -9,6 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Qt6 COMPONENTS Widgets Concurrent QUIET)
 
 add_library(gsm_core STATIC
+    core/scanner/SteamScanner.cpp
     core/analyzer/GameAnalyzer.cpp
     core/rules_engine/RecommendationEngine.cpp
     core/safety/SafetyMetadataStore.cpp
@@ -33,6 +34,10 @@ endif()
 
 if(MINGW)
     target_link_options(gsm_core PUBLIC -static-libgcc -static-libstdc++)
+endif()
+
+if(WIN32)
+    target_link_libraries(gsm_core PUBLIC advapi32)
 endif()
 
 add_executable(gsm_cli

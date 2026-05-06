@@ -1,6 +1,7 @@
 #include "ui/controllers/AnalysisController.h"
 
 #include "core/analyzer/GameAnalyzer.h"
+#include "core/scanner/SteamScanner.h"
 
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -16,5 +17,12 @@ QFuture<gsm::core::GameAnalysis> AnalysisController::analyzeFolder(const QString
     });
 }
 
-} // namespace gsm::ui
+QFuture<std::vector<gsm::core::GameEntry>> AnalysisController::scanSteamGames() const
+{
+    return QtConcurrent::run([]() {
+        gsm::core::SteamScanner scanner;
+        return scanner.scanInstalledGames();
+    });
+}
 
+} // namespace gsm::ui

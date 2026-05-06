@@ -1,10 +1,13 @@
 #include "core/analyzer/GameAnalysis.h"
 #include "core/rules_engine/RecommendationEngine.h"
 #include "core/safety/SafetyMetadataStore.h"
+#include "core/scanner/SteamScanner.h"
+#include "system/filesystem/Filesystem.h"
 #include "system/process/CompactProcessAdapter.h"
 
 #include <cassert>
 #include <cstdint>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -137,6 +140,82 @@ void stableIdsNormalizeDrivePaths()
     assert(first == second);
 }
 
+void steamLibraryFoldersSupportMultipleDrives()
+{
+    const std::string vdf = R"(
+        "libraryfolders"
+        {
+            "0"
+            {
+                "path" "C:\\Program Files (x86)\\Steam"
+            }
+            "1"
+            {
+                "path" "D:\\SteamLibrary"
+            }
+            "2" "E:\\Archive\\SteamLibrary"
+            "3" "d:\\SteamLibrary\\"
+        }
+    )";
+
+    const std::vector<gsm::system::Path> libraries =
+        gsm::core::SteamScanner::parseLibraryFoldersVdf("C:\\Program Files (x86)\\Steam", vdf);
+
+    assert(libraries.size() == 3);
+    assert(libraries[0] == "C:\\Program Files (x86)\\Steam");
+    assert(libraries[1] == "D:\\SteamLibrary");
+    assert(libraries[2] == "E:\\Archive\\SteamLibrary");
+}
+
+void steamAppManifestBuildsInstallPath()
+{
+    const std::string acf = R"(
+        "AppState"
+        {
+            "appid" "1245620"
+            "name" "ELDEN RING"
+            "installdir" "ELDEN RING"
+        }
+    )";
+
+    const std::optional<gsm::core::GameEntry> game =
+        gsm::core::SteamScanner::parseAppManifest("D:\\SteamLibrary", acf);
+
+    assert(game.has_value());
+    assert(game->source == gsm::core::GameSource::Steam);
+    assert(game->sourceId == "1245620");
+    assert(game->name == "ELDEN RING");
+    assert(game->libraryPath == "D:\\SteamLibrary");
+    assert(game->installPath == "D:\\SteamLibrary\\steamapps\\common\\ELDEN RING");
+}
+
+void steamScannerReadsFixtureLibrary()
+{
+    const gsm::system::Path fixtureRoot = ".\\steam_scanner_fixture";
+    const gsm::system::Path steamApps = gsm::system::joinPath(fixtureRoot, "steamapps");
+    assert(gsm::system::ensureDirectoryExists(steamApps));
+
+    const gsm::system::Path manifestPath = gsm::system::joinPath(steamApps, "appmanifest_480.acf");
+    std::ofstream manifest(manifestPath, std::ios::binary | std::ios::trunc);
+    manifest
+        << "\"AppState\"\n"
+        << "{\n"
+        << "    \"appid\" \"480\"\n"
+        << "    \"name\" \"Spacewar\"\n"
+        << "    \"installdir\" \"Spacewar\"\n"
+        << "}\n";
+    manifest.close();
+
+    gsm::core::SteamScanner scanner;
+    const std::vector<gsm::core::GameEntry> games = scanner.scanLibrary(fixtureRoot);
+
+    assert(games.size() == 1);
+    assert(games[0].sourceId == "480");
+    assert(games[0].name == "Spacewar");
+    assert(games[0].installPath == "steam_scanner_fixture\\steamapps\\common\\Spacewar" ||
+           games[0].installPath == ".\\steam_scanner_fixture\\steamapps\\common\\Spacewar");
+}
+
 } // namespace
 
 int main()
@@ -148,6 +227,9 @@ int main()
     safetyMetadataRoundTrips();
     safetyMetadataStoreSavesAndLoads();
     stableIdsNormalizeDrivePaths();
+    steamLibraryFoldersSupportMultipleDrives();
+    steamAppManifestBuildsInstallPath();
+    steamScannerReadsFixtureLibrary();
 
     std::cout << "gsm_core_tests passed\n";
     return 0;
