@@ -11,6 +11,34 @@ bool directoryExists(const Path& path)
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
+bool ensureDirectoryExists(const Path& path)
+{
+    const Path normalized = normalizePath(path);
+    if (normalized.empty() || directoryExists(normalized)) {
+        return true;
+    }
+
+    const std::size_t separator = normalized.find_last_of("\\/");
+    if (separator != std::string::npos) {
+        const Path parent = normalized.substr(0, separator);
+        if (!parent.empty() && !directoryExists(parent) && !ensureDirectoryExists(parent)) {
+            return false;
+        }
+    }
+
+    if (CreateDirectoryA(normalized.c_str(), nullptr) != 0) {
+        return true;
+    }
+
+    return GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+bool fileExists(const Path& path)
+{
+    const DWORD attributes = GetFileAttributesA(path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
 Path normalizePath(const Path& path)
 {
     Path normalized = path;
@@ -56,4 +84,3 @@ std::string fileExtension(const std::string& fileName)
 }
 
 } // namespace gsm::system
-

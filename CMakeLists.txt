@@ -11,6 +11,7 @@ find_package(Qt6 COMPONENTS Widgets Concurrent QUIET)
 add_library(gsm_core STATIC
     core/analyzer/GameAnalyzer.cpp
     core/rules_engine/RecommendationEngine.cpp
+    core/safety/SafetyMetadataStore.cpp
     system/filesystem/Filesystem.cpp
     system/process/CompactProcessAdapter.cpp
 )
