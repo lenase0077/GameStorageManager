@@ -39,7 +39,7 @@ private:
     void onRestore();
     void finishRestore();
     void showAnalysis(const gsm::core::GameAnalysis& analysis);
-    void showSteamGames(const std::vector<gsm::core::GameEntry>& games);
+    void refreshTableView();
     void updateGameRow(int row, const gsm::core::GameAnalysis& analysis);
     void setBusy(bool busy);
     void updateActiveState(const gsm::core::GameAnalysis& analysis,
@@ -48,8 +48,12 @@ private:
     void applyStoredMetadata();
     void updateActiveRowFromMetadata(const std::string& normalizedPath);
     void onProfileChanged(int index);
+    void onRemoveGame();
     bool tryGetRowAnalysis(int row, gsm::core::GameAnalysis& outAnalysis,
                            gsm::core::CompressionRecommendation& outRecommendation) const;
+
+    void loadLibrary();
+    void saveLibrary();
 
     static QString extractDriveLetter(const QString& path);
     static QString driveSpaceInfo(const QString& driveLetter);
@@ -60,6 +64,8 @@ private:
     std::optional<gsm::core::GameAnalysis> activeAnalysis_;
     std::optional<gsm::core::CompressionRecommendation> activeRecommendation_;
 
+    std::vector<gsm::core::GameEntry> libraryGames_;
+
     AnalysisController analysisController_;
     CompressionController compressionController_;
     QFutureWatcher<gsm::core::GameAnalysis> analysisWatcher_;
@@ -69,6 +75,9 @@ private:
 
     QLabel* statusLabel_ = nullptr;
     QLabel* totalSavedLabel_ = nullptr;
+    QLabel* gamesCountLabel_ = nullptr;
+    QLabel* spaceSavedLabel_ = nullptr;
+    QLabel* ratioLabel_ = nullptr;
     QLabel* selectedFolderLabel_ = nullptr;
     QProgressBar* progressBar_ = nullptr;
     QPushButton* selectFolderButton_ = nullptr;
@@ -77,6 +86,7 @@ private:
     QPushButton* analyzeSelectedButton_ = nullptr;
     QPushButton* optimizeButton_ = nullptr;
     QPushButton* restoreButton_ = nullptr;
+    QPushButton* removeButton_ = nullptr;
     QComboBox* profileCombo_ = nullptr;
     QTableWidget* gamesTable_ = nullptr;
 

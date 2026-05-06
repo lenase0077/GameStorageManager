@@ -5,6 +5,7 @@
 #include <map>
 #include <system_error>
 #include <unordered_set>
+#include <filesystem>
 #include <windows.h>
 
 namespace gsm::core {
@@ -21,7 +22,7 @@ std::string lowercased(const std::string& value)
 
 bool isAntiCheatFileName(const std::string& fileName)
 {
-    static const std::unordered_set<std::string> acNames = {
+    static const std::vector<std::string> acNames = {
         "battleye", "belauncher", "beservice", "battleye.sys",
         "easyanticheat", "easyanticheat.sys",
         "vgk", "vgk.sys", "vanguard",
@@ -43,7 +44,6 @@ bool isAntiCheatFileName(const std::string& fileName)
 
     const std::string lower = lowercased(fileName);
     for (const auto& ac : acNames) {
-        if (lower == ac) return true;
         if (lower.find(ac) != std::string::npos) return true;
     }
     return false;
@@ -63,80 +63,81 @@ std::string normalizeExtension(const std::string& fileName)
     return extension;
 }
 
-std::uintmax_t fileSizeFromFindData(const WIN32_FIND_DATAA& findData)
-{
-    ULARGE_INTEGER size;
-    size.HighPart = findData.nFileSizeHigh;
-    size.LowPart = findData.nFileSizeLow;
-    return size.QuadPart;
-}
-
 void analyzeDirectory(
     const gsm::system::Path& directory,
     GameAnalysis& analysis,
     std::map<std::string, ExtensionStats>& extensionStats)
 {
-    const std::string searchPath = gsm::system::joinPath(directory, "*");
-    WIN32_FIND_DATAA findData;
-    HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
+    std::error_code ec;
 
-    if (findHandle == INVALID_HANDLE_VALUE) {
+    if (!std::filesystem::is_directory(directory, ec)) {
+        return;
+    }
+
+    auto opts = std::filesystem::directory_options::skip_permission_denied;
+    auto it = std::filesystem::recursive_directory_iterator(directory, opts, ec);
+    if (ec) {
         ++analysis.inaccessibleEntryCount;
         return;
     }
 
-    do {
-        const std::string fileName = findData.cFileName;
-        if (fileName == "." || fileName == "..") {
+    // Process the root directory first? No, just iterate
+    for (auto& entry : it) {
+        if (ec) {
+            ++analysis.inaccessibleEntryCount;
+            // Clear the error to continue
+            ec.clear();
             continue;
         }
 
-        const bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const bool isReparsePoint = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-        const std::string fullPath = gsm::system::joinPath(directory, fileName);
-
-        if (isDirectory) {
+        const std::string fileName = entry.path().filename().string();
+        
+        if (entry.is_directory(ec)) {
             ++analysis.directoryCount;
             if (isAntiCheatFileName(fileName)) {
                 analysis.containsAntiCheatFiles = true;
             }
-            if (!isReparsePoint) {
-                analyzeDirectory(fullPath, analysis, extensionStats);
-            }
             continue;
         }
 
-        const std::uintmax_t size = fileSizeFromFindData(findData);
-        ++analysis.fileCount;
-        analysis.totalBytes += size;
-        analysis.largestFileBytes = std::max(analysis.largestFileBytes, size);
+        if (entry.is_regular_file(ec)) {
+            std::uintmax_t size = 0;
+            std::uintmax_t logSize = entry.file_size(ec);
+            DWORD high = 0;
+            DWORD low = GetCompressedFileSizeW(entry.path().wstring().c_str(), &high);
+            if (low != INVALID_FILE_SIZE || GetLastError() == NO_ERROR) {
+                size = (static_cast<std::uintmax_t>(high) << 32) | low;
+            } else {
+                size = logSize;
+            }
 
-        if ((findData.dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED) != 0) {
-            ++analysis.ntfsCompressedFileCount;
-            analysis.ntfsCompressedBytes += size;
+            ++analysis.fileCount;
+            analysis.totalBytes += size;
+            analysis.logicalBytes += logSize;
+            analysis.largestFileBytes = std::max(analysis.largestFileBytes, size);
+
+            DWORD attributes = GetFileAttributesW(entry.path().wstring().c_str());
+            if (attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_COMPRESSED) != 0) {
+                ++analysis.ntfsCompressedFileCount;
+                analysis.ntfsCompressedBytes += size;
+            }
+
+            const std::string extension = normalizeExtension(fileName);
+            ExtensionStats& stats = extensionStats[extension];
+            stats.extension = extension;
+            ++stats.fileCount;
+            stats.totalBytes += size;
+
+            if (GameAnalyzer::isKnownCompressedExtension(extension)) {
+                ++analysis.alreadyCompressedFileCount;
+                analysis.alreadyCompressedBytes += size;
+            }
+
+            if (!analysis.containsAntiCheatFiles && isAntiCheatFileName(fileName)) {
+                analysis.containsAntiCheatFiles = true;
+            }
         }
-
-        const std::string extension = normalizeExtension(fileName);
-        ExtensionStats& stats = extensionStats[extension];
-        stats.extension = extension;
-        ++stats.fileCount;
-        stats.totalBytes += size;
-
-        if (GameAnalyzer::isKnownCompressedExtension(extension)) {
-            ++analysis.alreadyCompressedFileCount;
-            analysis.alreadyCompressedBytes += size;
-        }
-
-        if (!analysis.containsAntiCheatFiles && isAntiCheatFileName(fileName)) {
-            analysis.containsAntiCheatFiles = true;
-        }
-    } while (FindNextFileA(findHandle, &findData) != 0);
-
-    if (GetLastError() != ERROR_NO_MORE_FILES) {
-        ++analysis.inaccessibleEntryCount;
     }
-
-    FindClose(findHandle);
 }
 
 } // namespace

@@ -22,23 +22,25 @@ gsm::system::Path appStorageRoot()
 
 QFuture<gsm::core::CompressionResult> CompressionController::compress(
     const gsm::core::GameAnalysis& analysis,
-    const gsm::core::CompressionRecommendation& recommendation) const
+    const gsm::core::CompressionRecommendation& recommendation,
+    std::function<void(size_t)> onProgress) const
 {
-    return QtConcurrent::run([analysis, recommendation]() {
+    return QtConcurrent::run([analysis, recommendation, onProgress]() {
         gsm::core::Compressor compressor;
         gsm::core::SafetyMetadataStore store(appStorageRoot());
-        return compressor.compress(analysis, recommendation, store);
+        return compressor.compress(analysis, recommendation, store, onProgress);
     });
 }
 
 QFuture<gsm::core::CompressionResult> CompressionController::restore(
-    const gsm::core::SafetyMetadata& metadata) const
+    const gsm::core::SafetyMetadata& metadata,
+    std::function<void(size_t)> onProgress) const
 {
     const std::string targetPath = metadata.rootPath;
-    return QtConcurrent::run([metadata, targetPath]() {
+    return QtConcurrent::run([metadata, targetPath, onProgress]() {
         gsm::core::Compressor compressor;
         gsm::core::SafetyMetadataStore store(appStorageRoot());
-        return compressor.restore(metadata, store, targetPath);
+        return compressor.restore(metadata, store, targetPath, onProgress);
     });
 }
 

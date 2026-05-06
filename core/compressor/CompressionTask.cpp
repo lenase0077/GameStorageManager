@@ -24,7 +24,8 @@ std::string utcNow()
 CompressionResult Compressor::compress(
     const GameAnalysis& analysis,
     const CompressionRecommendation& recommendation,
-    SafetyMetadataStore& metadataStore) const
+    SafetyMetadataStore& metadataStore,
+    std::function<void(size_t)> onProgress) const
 {
     CompressionResult result;
     result.bytesBefore = analysis.totalBytes;
@@ -66,8 +67,19 @@ CompressionResult Compressor::compress(
         return result;
     }
 
+    size_t lineCount = 0;
+    auto outputCallback = [&lineCount, onProgress](const std::string& chunk) {
+        if (!onProgress) return;
+        for (char c : chunk) {
+            if (c == '\n') {
+                ++lineCount;
+            }
+        }
+        onProgress(lineCount);
+    };
+
     const auto command = adapter_.buildCompressCommand(analysis.rootPath, algorithm);
-    const auto processResult = adapter_.run(command);
+    const auto processResult = adapter_.run(command, outputCallback);
 
     result.exitCode = processResult.exitCode;
     result.output = processResult.output;
@@ -107,7 +119,8 @@ CompressionResult Compressor::compress(
 CompressionResult Compressor::restore(
     const SafetyMetadata& metadata,
     SafetyMetadataStore& metadataStore,
-    const gsm::system::Path& targetPath) const
+    const gsm::system::Path& targetPath,
+    std::function<void(size_t)> onProgress) const
 {
     CompressionResult result;
     result.bytesBefore = metadata.sizeAfterBytes;
@@ -117,8 +130,19 @@ CompressionResult Compressor::restore(
         return result;
     }
 
+    size_t lineCount = 0;
+    auto outputCallback = [&lineCount, onProgress](const std::string& chunk) {
+        if (!onProgress) return;
+        for (char c : chunk) {
+            if (c == '\n') {
+                ++lineCount;
+            }
+        }
+        onProgress(lineCount);
+    };
+
     const auto command = adapter_.buildRestoreCommand(targetPath);
-    const auto processResult = adapter_.run(command);
+    const auto processResult = adapter_.run(command, outputCallback);
 
     result.exitCode = processResult.exitCode;
     result.output = processResult.output;

@@ -19,6 +19,7 @@ struct GameAnalysis {
     std::string errorMessage;
 
     std::uintmax_t totalBytes = 0;
+    std::uintmax_t logicalBytes = 0;
     std::uint64_t fileCount = 0;
     std::uint64_t directoryCount = 0;
     std::uint64_t inaccessibleEntryCount = 0;

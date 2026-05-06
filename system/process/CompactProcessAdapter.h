@@ -5,6 +5,7 @@
 
 #include <string>
 #include <vector>
+#include <functional>
 
 namespace gsm::system {
 
@@ -35,7 +36,7 @@ public:
 
     CompactCommand buildRestoreCommand(const gsm::system::Path& targetPath) const;
 
-    ProcessResult run(const CompactCommand& command) const;
+    ProcessResult run(const CompactCommand& command, std::function<void(const std::string&)> onOutput = nullptr) const;
 
     static CompactOutputMetrics parseCompressOutput(const std::string& output);
 };

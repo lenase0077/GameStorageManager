@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <functional>
 
 namespace gsm::core {
 
@@ -27,12 +28,14 @@ public:
     CompressionResult compress(
         const GameAnalysis& analysis,
         const CompressionRecommendation& recommendation,
-        SafetyMetadataStore& metadataStore) const;
+        SafetyMetadataStore& metadataStore,
+        std::function<void(size_t)> onProgress = nullptr) const;
 
     CompressionResult restore(
         const SafetyMetadata& metadata,
         SafetyMetadataStore& metadataStore,
-        const gsm::system::Path& targetPath) const;
+        const gsm::system::Path& targetPath,
+        std::function<void(size_t)> onProgress = nullptr) const;
 
 private:
     gsm::system::CompactProcessAdapter adapter_;

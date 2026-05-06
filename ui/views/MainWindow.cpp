@@ -7,6 +7,11 @@
 #include <QMessageBox>
 #include <QVBoxLayout>
 #include <QWidget>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QFile>
+#include <QDir>
 
 #include <algorithm>
 #include <cstdint>
@@ -136,11 +141,16 @@ MainWindow::MainWindow(QWidget* parent)
         onRestore();
     });
 
+    connect(removeButton_, &QPushButton::clicked, this, [this]() {
+        onRemoveGame();
+    });
+
     connect(profileCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
         onProfileChanged(index);
     });
 
     setBusy(false);
+    loadLibrary();
 }
 
 void MainWindow::buildLayout()
@@ -162,9 +172,26 @@ void MainWindow::buildLayout()
     titleBlock->addWidget(statusLabel_);
     headerLayout->addLayout(titleBlock, 1);
 
-    totalSavedLabel_ = new QLabel("Saved: 0 B", centralWidget);
-    totalSavedLabel_->setObjectName("metricLabel");
-    headerLayout->addWidget(totalSavedLabel_, 0);
+    auto* metricsFrame = new QFrame(centralWidget);
+    metricsFrame->setObjectName("metricsFrame");
+    auto* metricsLayout = new QHBoxLayout(metricsFrame);
+    metricsLayout->setContentsMargins(16, 8, 16, 8);
+    metricsLayout->setSpacing(20);
+
+    gamesCountLabel_ = new QLabel("🎮 0 Optimized", metricsFrame);
+    gamesCountLabel_->setObjectName("metricValue");
+
+    spaceSavedLabel_ = new QLabel("🔥 0 B Saved", metricsFrame);
+    spaceSavedLabel_->setObjectName("metricValue");
+
+    ratioLabel_ = new QLabel("📊 0.0% Avg Ratio", metricsFrame);
+    ratioLabel_->setObjectName("metricValue");
+
+    metricsLayout->addWidget(gamesCountLabel_);
+    metricsLayout->addWidget(spaceSavedLabel_);
+    metricsLayout->addWidget(ratioLabel_);
+
+    headerLayout->addWidget(metricsFrame, 0, Qt::AlignRight | Qt::AlignVCenter);
     rootLayout->addLayout(headerLayout);
 
     auto* actionFrame = new QFrame(centralWidget);
@@ -173,12 +200,13 @@ void MainWindow::buildLayout()
     actionLayout->setContentsMargins(14, 12, 14, 12);
     actionLayout->setSpacing(10);
 
-    selectFolderButton_ = new QPushButton("Select Folder", actionFrame);
+    selectFolderButton_ = new QPushButton("Add Game Folder", actionFrame);
     scanSteamButton_ = new QPushButton("Scan Steam", actionFrame);
     analyzeButton_ = new QPushButton("Analyze", actionFrame);
     analyzeSelectedButton_ = new QPushButton("Analyze Selected", actionFrame);
     optimizeButton_ = new QPushButton("Optimize", actionFrame);
     restoreButton_ = new QPushButton("Restore", actionFrame);
+    removeButton_ = new QPushButton("Remove", actionFrame);
     selectedFolderLabel_ = new QLabel("No folder selected", actionFrame);
     selectedFolderLabel_->setObjectName("pathLabel");
 
@@ -197,6 +225,7 @@ void MainWindow::buildLayout()
     actionLayout->addWidget(analyzeSelectedButton_);
     actionLayout->addWidget(optimizeButton_);
     actionLayout->addWidget(restoreButton_);
+    actionLayout->addWidget(removeButton_);
     actionLayout->addWidget(profileCombo_);
     actionLayout->addWidget(selectedFolderLabel_, 1);
     rootLayout->addWidget(actionFrame);
@@ -254,6 +283,18 @@ void MainWindow::applyTheme()
         QLabel#metricLabel {
             color: #8EE6B1;
             font-size: 14pt;
+            font-weight: 700;
+        }
+
+        QFrame#metricsFrame {
+            background: #16241D;
+            border: 1px solid #2B4D36;
+            border-radius: 8px;
+        }
+        
+        QLabel#metricValue {
+            color: #8EE6B1;
+            font-size: 11pt;
             font-weight: 700;
         }
 
@@ -351,6 +392,26 @@ void MainWindow::chooseFolder()
 
     selectedFolder_ = folderPath;
     selectedFolderLabel_->setText(folderPath);
+
+    std::string pathStr = folderPath.toStdString();
+    bool exists = false;
+    for (const auto& g : libraryGames_) {
+        if (QString::fromStdString(g.installPath).compare(folderPath, Qt::CaseInsensitive) == 0) {
+            exists = true;
+            break;
+        }
+    }
+    
+    if (!exists) {
+        gsm::core::GameEntry entry;
+        entry.name = baseNameFromPath(folderPath).toStdString();
+        entry.installPath = pathStr;
+        entry.source = gsm::core::GameSource::Manual;
+        libraryGames_.push_back(entry);
+        saveLibrary();
+        refreshTableView();
+    }
+
     activeRow_ = -1;
     activeAnalysis_.reset();
     activeRecommendation_.reset();
@@ -363,11 +424,22 @@ void MainWindow::startAnalysis(const QString& folderPath, const QString& gameNam
 {
     setBusy(true);
     statusLabel_->setText("Analyzing");
-    if (analyzingRow_ < 0) {
-        gamesTable_->setRowCount(0);
-    } else {
+
+    analyzingRow_ = -1;
+    for (int r = 0; r < gamesTable_->rowCount(); ++r) {
+        auto* item = gamesTable_->item(r, 0);
+        if (item && !item->data(Qt::UserRole + 1).toBool()) {
+            if (item->data(Qt::UserRole).toString().compare(folderPath, Qt::CaseInsensitive) == 0) {
+                analyzingRow_ = r;
+                break;
+            }
+        }
+    }
+
+    if (analyzingRow_ >= 0) {
         updateRowStatus(analyzingRow_, "Analyzing...");
     }
+
     selectedFolderLabel_->setText(folderPath);
     analysisWatcher_.setFuture(analysisController_.analyzeFolder(folderPath, gameName));
 }
@@ -377,7 +449,7 @@ void MainWindow::startSteamScan()
     setBusy(true);
     statusLabel_->setText("Scanning Steam");
     selectedFolderLabel_->setText("Scanning Steam libraries");
-    gamesTable_->setRowCount(0);
+    
     activeRow_ = -1;
     activeAnalysis_.reset();
     activeRecommendation_.reset();
@@ -398,13 +470,25 @@ void MainWindow::finishAnalysis()
         return;
     }
 
+    if (analyzingRow_ < 0) {
+        for (int r = 0; r < gamesTable_->rowCount(); ++r) {
+            auto* item = gamesTable_->item(r, 0);
+            if (item && !item->data(Qt::UserRole + 1).toBool()) {
+                if (item->data(Qt::UserRole).toString().compare(QString::fromStdString(analysis.rootPath), Qt::CaseInsensitive) == 0) {
+                    analyzingRow_ = r;
+                    break;
+                }
+            }
+        }
+    }
+
     if (analyzingRow_ >= 0) {
         updateGameRow(analyzingRow_, analysis);
         activeRow_ = analyzingRow_;
         analyzingRow_ = -1;
     } else {
         showAnalysis(analysis);
-        activeRow_ = 0;
+        activeRow_ = gamesTable_->rowCount() - 1;
     }
 
     gsm::core::RecommendationEngine engine;
@@ -419,7 +503,22 @@ void MainWindow::finishSteamScan()
     setBusy(false);
 
     const std::vector<gsm::core::GameEntry> games = steamScanWatcher_.result();
-    showSteamGames(games);
+    
+    for (const auto& g : games) {
+        bool exists = false;
+        for (const auto& libG : libraryGames_) {
+            if (QString::fromStdString(libG.installPath).compare(QString::fromStdString(g.installPath), Qt::CaseInsensitive) == 0) {
+                exists = true;
+                break;
+            }
+        }
+        if (!exists) {
+            libraryGames_.push_back(g);
+        }
+    }
+    
+    saveLibrary();
+    refreshTableView();
     applyStoredMetadata();
     statusLabel_->setText(QString("Steam games found: %1").arg(games.size()));
 }
@@ -430,36 +529,87 @@ void MainWindow::showAnalysis(const gsm::core::GameAnalysis& analysis)
     const gsm::core::CompressionRecommendation recommendation =
         engine.recommendWithAlgorithm(analysis, currentAlgorithm_);
 
-    gamesTable_->setRowCount(1);
+    int row = gamesTable_->rowCount();
+    gamesTable_->insertRow(row);
 
     const QString rootPath = QString::fromStdString(analysis.rootPath);
     const QString compressedAssets = QString("%1 ext / %2 NTFS")
         .arg(QString::number(analysis.alreadyCompressedFileCount))
         .arg(QString::number(analysis.ntfsCompressedFileCount));
 
+    gsm::core::GameSource source = gsm::core::GameSource::Manual;
+    for (const auto& g : libraryGames_) {
+        if (QString::fromStdString(g.installPath).compare(rootPath, Qt::CaseInsensitive) == 0) {
+            source = g.source;
+            break;
+        }
+    }
+
+    const QString prefix = (source == gsm::core::GameSource::Steam) ? "🎮 " : "📁 ";
+    
+    QString sizeText = formatBytes(analysis.totalBytes);
+    QString statusText = reasonText(recommendation);
+    bool isOptimized = false;
+
+    if (analysis.totalBytes < analysis.logicalBytes && analysis.ntfsCompressedFileCount > 0) {
+        const auto saved = analysis.logicalBytes - analysis.totalBytes;
+        if (saved > 1024 * 1024) { // Ignore < 1MB differences
+            sizeText = QString("%1 (-%2)").arg(formatBytes(analysis.totalBytes), formatBytes(saved));
+            statusText = QString("Optimized (%1 saved)").arg(formatBytes(saved));
+            isOptimized = true;
+        }
+    }
+
     const QStringList values = {
-        baseNameFromPath(rootPath),
+        prefix + baseNameFromPath(rootPath),
         rootPath,
-        formatBytes(analysis.totalBytes),
+        sizeText,
         QString::number(analysis.fileCount),
         compressedAssets,
         recommendationText(recommendation),
         QString::fromStdString(gsm::core::toString(recommendation.risk)),
-        reasonText(recommendation)
+        statusText
     };
 
     for (int column = 0; column < values.size(); ++column) {
         auto* item = new QTableWidgetItem(values[column]);
-        gamesTable_->setItem(0, column, item);
+        item->setData(Qt::UserRole, rootPath);
+        item->setData(Qt::UserRole + 1, false);
+
+        if (column == 0) {
+            if (source == gsm::core::GameSource::Steam) {
+                item->setForeground(QColor("#4D9DE0"));
+                item->setToolTip("Source: Steam");
+            } else {
+                item->setForeground(QColor("#8EE6B1"));
+                item->setToolTip("Source: Manual");
+            }
+        }
+        
+        if (column == 7) {
+            if (isOptimized) {
+                item->setForeground(QColor("#8EE6B1"));
+            } else {
+                item->setForeground(QColor("#E9EDF1"));
+            }
+        }
+
+        gamesTable_->setItem(row, column, item);
     }
 
-    rowAnalyses_[0] = analysis;
-    rowRecommendations_[0] = recommendation;
+    rowAnalyses_[row] = analysis;
+    rowRecommendations_[row] = recommendation;
 }
 
-void MainWindow::showSteamGames(const std::vector<gsm::core::GameEntry>& games)
+void MainWindow::refreshTableView()
 {
-    auto sorted = games;
+    activeRow_ = -1;
+    activeAnalysis_.reset();
+    activeRecommendation_.reset();
+    rowAnalyses_.clear();
+    rowRecommendations_.clear();
+
+    auto sorted = libraryGames_;
     std::sort(sorted.begin(), sorted.end(), [](const gsm::core::GameEntry& a, const gsm::core::GameEntry& b) {
         const QString da = MainWindow::extractDriveLetter(QString::fromStdString(a.installPath));
         const QString db = MainWindow::extractDriveLetter(QString::fromStdString(b.installPath));
@@ -516,27 +666,106 @@ void MainWindow::showSteamGames(const std::vector<gsm::core::GameEntry>& games)
         const int gameRow = totalRows++;
         gamesTable_->insertRow(gameRow);
 
+        const QString path = QString::fromStdString(game.installPath);
+        bool folderExists = QDir(path).exists();
+        
+        const QString prefix = (game.source == gsm::core::GameSource::Steam) ? "🎮 " : "📁 ";
         const QStringList values = {
-            QString::fromStdString(game.name),
+            prefix + QString::fromStdString(game.name),
             QString::fromStdString(game.installPath),
             "Not analyzed",
             "-",
             "-",
             "Pending",
             "-",
-            QString::fromStdString(gsm::core::toString(game.source))
+            folderExists ? QString::fromStdString(gsm::core::toString(game.source)) : "Not found (Missing)"
         };
 
-        const QString path = QString::fromStdString(game.installPath);
         for (int col = 0; col < values.size(); ++col) {
             auto* item = new QTableWidgetItem(values[col]);
             item->setData(kPathRole, path);
             item->setData(kDriveHeaderBgRole, false);
+
+            if (col == 0) {
+                if (game.source == gsm::core::GameSource::Steam) {
+                    item->setForeground(QColor("#4D9DE0"));
+                    item->setToolTip("Source: Steam");
+                } else {
+                    item->setForeground(QColor("#8EE6B1"));
+                    item->setToolTip("Source: Manual");
+                }
+            }
+            
+            if (!folderExists) {
+                item->setForeground(QColor("#F85149")); // Red for missing
+            }
+
             gamesTable_->setItem(gameRow, col, item);
         }
     }
 
     analyzingRow_ = -1;
+}
+
+void MainWindow::loadLibrary()
+{
+    const char* localAppData = std::getenv("LOCALAPPDATA");
+    const QString storageRoot = localAppData
+        ? QString::fromStdString(gsm::system::joinPath(localAppData, "GameStorageManager/metadata"))
+        : "metadata";
+
+    QDir().mkpath(storageRoot);
+    QFile file(storageRoot + "/library.json");
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    if (doc.isArray()) {
+        QJsonArray arr = doc.array();
+        libraryGames_.clear();
+        for (const auto& val : arr) {
+            QJsonObject obj = val.toObject();
+            gsm::core::GameEntry entry;
+            entry.name = obj["name"].toString().toStdString();
+            entry.installPath = obj["installPath"].toString().toStdString();
+            
+            QString src = obj["source"].toString();
+            if (src == "Steam") entry.source = gsm::core::GameSource::Steam;
+            else if (src == "Epic") entry.source = gsm::core::GameSource::Epic;
+            else entry.source = gsm::core::GameSource::Manual;
+
+            libraryGames_.push_back(entry);
+        }
+    }
+    
+    refreshTableView();
+}
+
+void MainWindow::saveLibrary()
+{
+    const char* localAppData = std::getenv("LOCALAPPDATA");
+    const QString storageRoot = localAppData
+        ? QString::fromStdString(gsm::system::joinPath(localAppData, "GameStorageManager/metadata"))
+        : "metadata";
+
+    QDir().mkpath(storageRoot);
+    QFile file(storageRoot + "/library.json");
+    if (!file.open(QIODevice::WriteOnly)) {
+        return;
+    }
+
+    QJsonArray arr;
+    for (const auto& g : libraryGames_) {
+        QJsonObject obj;
+        obj["name"] = QString::fromStdString(g.name);
+        obj["installPath"] = QString::fromStdString(g.installPath);
+        obj["source"] = QString::fromStdString(gsm::core::toString(g.source));
+        arr.append(obj);
+    }
+
+    QJsonDocument doc(arr);
+    file.write(doc.toJson());
 }
 
 void MainWindow::onAnalyzeSelected()
@@ -560,6 +789,12 @@ void MainWindow::onAnalyzeSelected()
     const QString path = item->data(Qt::UserRole).toString();
     if (path.isEmpty()) return;
 
+    if (!QDir(path).exists()) {
+        QMessageBox::warning(this, "Folder Missing", "The game folder no longer exists. It may have been uninstalled or moved.");
+        updateRowStatus(currentRow, "Not found (Missing)");
+        return;
+    }
+
     analyzingRow_ = currentRow;
     startAnalysis(path, gameName);
 }
@@ -574,18 +809,42 @@ void MainWindow::updateGameRow(int row, const gsm::core::GameAnalysis& analysis)
         .arg(analysis.alreadyCompressedFileCount)
         .arg(analysis.ntfsCompressedFileCount);
 
+    const QString path = QString::fromStdString(analysis.rootPath);
+    
+    gsm::core::GameSource source = gsm::core::GameSource::Manual;
+    for (const auto& g : libraryGames_) {
+        if (QString::fromStdString(g.installPath).compare(path, Qt::CaseInsensitive) == 0) {
+            source = g.source;
+            break;
+        }
+    }
+
+    const QString prefix = (source == gsm::core::GameSource::Steam) ? "🎮 " : "📁 ";
+    
+    QString sizeText = formatBytes(analysis.totalBytes);
+    QString statusText = reasonText(rec);
+    bool isOptimized = false;
+
+    if (analysis.totalBytes < analysis.logicalBytes && analysis.ntfsCompressedFileCount > 0) {
+        const auto saved = analysis.logicalBytes - analysis.totalBytes;
+        if (saved > 1024 * 1024) { // Ignore < 1MB differences
+            sizeText = QString("%1 (-%2)").arg(formatBytes(analysis.totalBytes), formatBytes(saved));
+            statusText = QString("Optimized (%1 saved)").arg(formatBytes(saved));
+            isOptimized = true;
+        }
+    }
+
     const QStringList values = {
-        baseNameFromPath(QString::fromStdString(analysis.rootPath)),
-        QString::fromStdString(analysis.rootPath),
-        formatBytes(analysis.totalBytes),
+        prefix + baseNameFromPath(path),
+        path,
+        sizeText,
         QString::number(analysis.fileCount),
         compressedAssets,
         recommendationText(rec),
         QString::fromStdString(gsm::core::toString(rec.risk)),
-        reasonText(rec)
+        statusText
     };
 
-    const QString path = QString::fromStdString(analysis.rootPath);
     for (int col = 0; col < values.size(); ++col) {
         auto* item = gamesTable_->item(row, col);
         if (!item) {
@@ -595,6 +854,24 @@ void MainWindow::updateGameRow(int row, const gsm::core::GameAnalysis& analysis)
             item->setText(values[col]);
         }
         item->setData(Qt::UserRole, path);
+
+        if (col == 0) {
+            if (source == gsm::core::GameSource::Steam) {
+                item->setForeground(QColor("#4D9DE0"));
+                item->setToolTip("Source: Steam");
+            } else {
+                item->setForeground(QColor("#8EE6B1"));
+                item->setToolTip("Source: Manual");
+            }
+        }
+        
+        if (col == 7) {
+            if (isOptimized) {
+                item->setForeground(QColor("#8EE6B1"));
+            } else {
+                item->setForeground(QColor("#E9EDF1"));
+            }
+        }
     }
 
     rowAnalyses_[row] = analysis;
@@ -635,6 +912,9 @@ void MainWindow::applyStoredMetadata()
     }
 
     std::uintmax_t totalSaved = 0;
+    int gamesOptimized = 0;
+    std::uintmax_t totalBeforeBytes = 0;
+    std::uintmax_t totalAfterBytes = 0;
 
     for (int row = 0; row < gamesTable_->rowCount(); ++row) {
         auto* item = gamesTable_->item(row, 0);
@@ -656,11 +936,21 @@ void MainWindow::applyStoredMetadata()
             const auto saved = meta.sizeBeforeBytes > meta.sizeAfterBytes
                 ? meta.sizeBeforeBytes - meta.sizeAfterBytes : 0;
             totalSaved += saved;
+            gamesOptimized++;
+            totalBeforeBytes += meta.sizeBeforeBytes;
+            totalAfterBytes += meta.sizeAfterBytes;
+            
             updateRowStatus(row, QString("Optimized (%1)").arg(formatBytes(saved)));
+
+            // Highlight status in green
+            auto* statusItem = gamesTable_->item(row, 7);
+            if (statusItem) {
+                statusItem->setForeground(QColor("#8EE6B1"));
+            }
 
             auto* sizeItem = gamesTable_->item(row, 2);
             if (sizeItem) {
-                sizeItem->setText(formatBytes(meta.sizeAfterBytes));
+                sizeItem->setText(QString("%1 (-%2)").arg(formatBytes(meta.sizeAfterBytes), formatBytes(saved)));
             }
 
             auto* recItem = gamesTable_->item(row, 5);
@@ -683,9 +973,14 @@ void MainWindow::applyStoredMetadata()
         }
     }
 
-    if (totalSaved > 0) {
-        totalSavedLabel_->setText(QString("Total saved: %1").arg(formatBytes(totalSaved)));
+    gamesCountLabel_->setText(QString("🎮 %1 Optimized").arg(gamesOptimized));
+    spaceSavedLabel_->setText(QString("🔥 %1 Saved").arg(formatBytes(totalSaved)));
+
+    double ratio = 0.0;
+    if (totalBeforeBytes > 0) {
+        ratio = (static_cast<double>(totalBeforeBytes - totalAfterBytes) / totalBeforeBytes) * 100.0;
     }
+    ratioLabel_->setText(QString("📊 %1% Avg Ratio").arg(QString::number(ratio, 'f', 1)));
 }
 
 void MainWindow::updateActiveRowFromMetadata(const std::string& normalizedPath)
@@ -701,10 +996,6 @@ void MainWindow::updateActiveRowFromMetadata(const std::string& normalizedPath)
     if (metadata.has_value() && metadata->state == gsm::core::SafetyOperationState::Completed) {
         optimizeButton_->setEnabled(false);
         restoreButton_->setEnabled(true);
-
-        const auto saved = metadata->sizeBeforeBytes > metadata->sizeAfterBytes
-            ? metadata->sizeBeforeBytes - metadata->sizeAfterBytes : 0;
-        totalSavedLabel_->setText(QString("Saved: %1").arg(formatBytes(saved)));
     }
 }
 
@@ -718,28 +1009,30 @@ void MainWindow::onProfileChanged(int index)
     default: return;
     }
 
-    if (!activeAnalysis_.has_value()) return;
-
     gsm::core::RecommendationEngine engine;
-    const gsm::core::CompressionRecommendation rec =
-        engine.recommendWithAlgorithm(*activeAnalysis_, currentAlgorithm_);
-    activeRecommendation_ = rec;
 
-    updateActiveState(*activeAnalysis_, rec);
+    for (auto& [row, analysis] : rowAnalyses_) {
+        const gsm::core::CompressionRecommendation rec = engine.recommendWithAlgorithm(analysis, currentAlgorithm_);
+        rowRecommendations_[row] = rec;
 
-    if (activeRow_ >= 0) {
-        auto* recItem = gamesTable_->item(activeRow_, 5);
+        auto* recItem = gamesTable_->item(row, 5);
         if (recItem) {
             recItem->setText(recommendationText(rec));
         }
-        auto* riskItem = gamesTable_->item(activeRow_, 6);
+        auto* riskItem = gamesTable_->item(row, 6);
         if (riskItem) {
             riskItem->setText(QString::fromStdString(gsm::core::toString(rec.risk)));
         }
-        auto* statusItem = gamesTable_->item(activeRow_, 7);
+        auto* statusItem = gamesTable_->item(row, 7);
         if (statusItem) {
             statusItem->setText(reasonText(rec));
         }
+    }
+
+    if (activeAnalysis_.has_value()) {
+        const gsm::core::CompressionRecommendation rec = engine.recommendWithAlgorithm(*activeAnalysis_, currentAlgorithm_);
+        activeRecommendation_ = rec;
+        updateActiveState(*activeAnalysis_, rec);
     }
 }
 
@@ -766,12 +1059,15 @@ void MainWindow::updateActiveState(const gsm::core::GameAnalysis& analysis,
     activeAnalysis_ = analysis;
     activeRecommendation_ = recommendation;
 
-    updateActiveRowFromMetadata(gsm::system::normalizePath(analysis.rootPath));
-
-    if (optimizeButton_->isEnabled() || restoreButton_->isEnabled()) return;
-
     optimizeButton_->setEnabled(recommendation.action == gsm::core::RecommendationAction::Compress);
-    restoreButton_->setEnabled(false);
+    
+    // Reality-based restore button: if NTFS compression exists on disk, we can restore it!
+    bool hasCompression = analysis.ntfsCompressedFileCount > 0 || analysis.totalBytes < analysis.logicalBytes;
+    restoreButton_->setEnabled(hasCompression);
+
+    if (hasCompression && analysis.totalBytes < analysis.logicalBytes) {
+        // We only show metrics via applyStoredMetadata now
+    }
 }
 
 void MainWindow::updateRowStatus(int row, const QString& status)
@@ -814,13 +1110,22 @@ void MainWindow::onOptimize()
 
     setBusy(true);
     statusLabel_->setText("Optimizing");
+    
+    progressBar_->setMaximum(static_cast<int>(analysis.fileCount));
+    progressBar_->setValue(0);
 
     if (activeRow_ >= 0) {
         updateRowStatus(activeRow_, "Optimizing");
     }
 
+    auto onProgress = [this](size_t linesProcessed) {
+        QMetaObject::invokeMethod(this, [this, linesProcessed]() {
+            progressBar_->setValue(static_cast<int>(linesProcessed));
+        }, Qt::QueuedConnection);
+    };
+
     compressWatcher_.setFuture(
-        compressionController_.compress(analysis, recommendation));
+        compressionController_.compress(analysis, recommendation, onProgress));
 }
 
 void MainWindow::finishCompression()
@@ -849,7 +1154,6 @@ void MainWindow::finishCompression()
             detail = "No files compressed. Folder is already NTFS-compressed or contains only incompressible data.";
         }
         statusLabel_->setText(detail);
-        statusLabel_->setText(detail);
         if (activeRow_ >= 0) updateRowStatus(activeRow_, "No change");
         QMessageBox::information(this, "No savings", detail);
         optimizeButton_->setEnabled(true);
@@ -863,10 +1167,12 @@ void MainWindow::finishCompression()
     if (activeRow_ >= 0) {
         updateRowStatus(activeRow_, QString("Optimized (%1 saved)").arg(savedStr));
         auto* sizeItem = gamesTable_->item(activeRow_, 2);
-        if (sizeItem) sizeItem->setText(formatBytes(result.bytesAfter));
+        if (sizeItem) sizeItem->setText(QString("%1 (-%2)").arg(formatBytes(result.bytesAfter), savedStr));
+        auto* statusItem = gamesTable_->item(activeRow_, 7);
+        if (statusItem) statusItem->setForeground(QColor("#8EE6B1"));
     }
 
-    totalSavedLabel_->setText(QString("Saved: %1").arg(savedStr));
+    applyStoredMetadata(); // update the metrics UI
     optimizeButton_->setEnabled(false);
     restoreButton_->setEnabled(true);
 }
@@ -880,6 +1186,9 @@ void MainWindow::onRestore()
 
     setBusy(true);
     statusLabel_->setText("Restoring");
+    
+    progressBar_->setMaximum(static_cast<int>(activeAnalysis_->fileCount));
+    progressBar_->setValue(0);
 
     if (activeRow_ >= 0) updateRowStatus(activeRow_, "Restoring");
 
@@ -890,7 +1199,13 @@ void MainWindow::onRestore()
     metadata.id = id;
     metadata.rootPath = path;
 
-    restoreWatcher_.setFuture(compressionController_.restore(metadata));
+    auto onProgress = [this](size_t linesProcessed) {
+        QMetaObject::invokeMethod(this, [this, linesProcessed]() {
+            progressBar_->setValue(static_cast<int>(linesProcessed));
+        }, Qt::QueuedConnection);
+    };
+
+    restoreWatcher_.setFuture(compressionController_.restore(metadata, onProgress));
 }
 
 void MainWindow::finishRestore()
@@ -911,11 +1226,61 @@ void MainWindow::finishRestore()
         updateRowStatus(activeRow_, "Restored");
         auto* sizeItem = gamesTable_->item(activeRow_, 2);
         if (sizeItem) sizeItem->setText(formatBytes(result.bytesAfter));
+        auto* statusItem = gamesTable_->item(activeRow_, 7);
+        if (statusItem) statusItem->setForeground(QColor("#E9EDF1")); // reset color
     }
 
-    totalSavedLabel_->setText("Saved: 0 B");
+    applyStoredMetadata(); // update the metrics UI
     optimizeButton_->setEnabled(true);
     restoreButton_->setEnabled(false);
+}
+
+void MainWindow::onRemoveGame()
+{
+    const int currentRow = gamesTable_->currentRow();
+    if (currentRow < 0 || currentRow >= gamesTable_->rowCount()) {
+        QMessageBox::information(this, "No selection", "Select a game row to remove.");
+        return;
+    }
+
+    auto* item = gamesTable_->item(currentRow, 0);
+    if (!item) return;
+
+    constexpr int kDriveHeaderBgRole = Qt::UserRole + 1;
+    if (item->data(kDriveHeaderBgRole).toBool()) {
+        return;
+    }
+
+    const QString path = item->data(Qt::UserRole).toString();
+    if (path.isEmpty()) return;
+
+    bool exists = QDir(path).exists();
+    if (exists) {
+        const std::string normalizedPath = gsm::system::normalizePath(path.toStdString());
+        const char* localAppData = std::getenv("LOCALAPPDATA");
+        const std::string storageRoot = localAppData
+            ? gsm::system::joinPath(localAppData, "GameStorageManager/metadata")
+            : "metadata";
+
+        gsm::core::SafetyMetadataStore store(storageRoot);
+        const auto metadata = store.loadById(gsm::core::SafetyMetadataStore::makeStableId(normalizedPath));
+
+        if (metadata.has_value() && metadata->state == gsm::core::SafetyOperationState::Completed) {
+            QMessageBox::warning(this, "Cannot remove", "This game is currently optimized. You must Restore it before removing it from the library to prevent leaving compressed files behind.");
+            return;
+        }
+    }
+
+    auto it = std::remove_if(libraryGames_.begin(), libraryGames_.end(), [&](const gsm::core::GameEntry& g) {
+        return QString::fromStdString(g.installPath).compare(path, Qt::CaseInsensitive) == 0;
+    });
+
+    if (it != libraryGames_.end()) {
+        libraryGames_.erase(it, libraryGames_.end());
+        saveLibrary();
+        refreshTableView();
+        applyStoredMetadata();
+    }
 }
 
 void MainWindow::setBusy(bool busy)
@@ -928,6 +1293,7 @@ void MainWindow::setBusy(bool busy)
         optimizeButton_->setEnabled(false);
         restoreButton_->setEnabled(false);
     }
+    removeButton_->setEnabled(!busy);
     profileCombo_->setEnabled(!busy);
     progressBar_->setRange(busy ? 0 : 0, busy ? 0 : 1);
     progressBar_->setValue(busy ? 0 : 1);

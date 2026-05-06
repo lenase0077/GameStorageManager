@@ -101,58 +101,75 @@ bool isAntiCheatPath(const std::string& rootPath)
     return false;
 }
 
-} // namespace
-
-CompressionRecommendation RecommendationEngine::recommend(const GameAnalysis& analysis, OptimizationProfile profile) const
+bool applySkipRules(const GameAnalysis& analysis, CompressionRecommendation& recommendation)
 {
-    CompressionRecommendation recommendation;
-
     if (!analysis.isValid) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::High;
         recommendation.reasons.push_back("analysis-invalid");
-        return recommendation;
+        return true;
     }
 
     if (analysis.totalBytes == 0 || analysis.fileCount == 0) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::Low;
         recommendation.reasons.push_back("empty-folder");
-        return recommendation;
+        return true;
     }
 
     if (analysis.alreadyCompressedByteRatio() >= 0.88) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::Medium;
         recommendation.reasons.push_back("mostly-already-compressed-assets");
-        return recommendation;
+        return true;
     }
 
-    if (analysis.ntfsCompressedByteRatio() >= 0.90) {
+    if (analysis.ntfsCompressedByteRatio() >= 0.95) {
         recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::Medium;
+        recommendation.risk = RecommendationRisk::Low;
         recommendation.reasons.push_back("already-ntfs-compressed");
-        return recommendation;
+        return true;
+    }
+
+    // Allow partial compressions to resume. We only skip if it's fully optimized.
+    if (analysis.totalBytes < analysis.logicalBytes * 0.50 && analysis.ntfsCompressedByteRatio() > 0.80) {
+        recommendation.action = RecommendationAction::Skip;
+        recommendation.risk = RecommendationRisk::Low;
+        recommendation.reasons.push_back("already-optimized-disk");
+        return true;
     }
 
     if (!analysis.gameName.empty() && isAntiCheatGameByName(analysis.gameName)) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::High;
         recommendation.reasons.push_back("anti-cheat-game");
-        return recommendation;
+        return true;
     }
 
     if (analysis.containsAntiCheatFiles) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::High;
         recommendation.reasons.push_back("anti-cheat-files-found");
-        return recommendation;
+        return true;
     }
 
     if (isAntiCheatPath(analysis.rootPath)) {
         recommendation.action = RecommendationAction::Skip;
         recommendation.risk = RecommendationRisk::High;
         recommendation.reasons.push_back("anti-cheat-path");
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace
+
+CompressionRecommendation RecommendationEngine::recommend(const GameAnalysis& analysis, OptimizationProfile profile) const
+{
+    CompressionRecommendation recommendation;
+
+    if (applySkipRules(analysis, recommendation)) {
         return recommendation;
     }
 
@@ -196,52 +213,7 @@ CompressionRecommendation RecommendationEngine::recommendWithAlgorithm(const Gam
 {
     CompressionRecommendation recommendation;
 
-    if (!analysis.isValid) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::High;
-        recommendation.reasons.push_back("analysis-invalid");
-        return recommendation;
-    }
-
-    if (analysis.totalBytes == 0 || analysis.fileCount == 0) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::Low;
-        recommendation.reasons.push_back("empty-folder");
-        return recommendation;
-    }
-
-    if (analysis.alreadyCompressedByteRatio() >= 0.88) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::Medium;
-        recommendation.reasons.push_back("mostly-already-compressed-assets");
-        return recommendation;
-    }
-
-    if (analysis.ntfsCompressedByteRatio() >= 0.90) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::Medium;
-        recommendation.reasons.push_back("already-ntfs-compressed");
-        return recommendation;
-    }
-
-    if (!analysis.gameName.empty() && isAntiCheatGameByName(analysis.gameName)) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::High;
-        recommendation.reasons.push_back("anti-cheat-game");
-        return recommendation;
-    }
-
-    if (analysis.containsAntiCheatFiles) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::High;
-        recommendation.reasons.push_back("anti-cheat-files-found");
-        return recommendation;
-    }
-
-    if (isAntiCheatPath(analysis.rootPath)) {
-        recommendation.action = RecommendationAction::Skip;
-        recommendation.risk = RecommendationRisk::High;
-        recommendation.reasons.push_back("anti-cheat-path");
+    if (applySkipRules(analysis, recommendation)) {
         return recommendation;
     }
 

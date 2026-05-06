@@ -1,77 +1,67 @@
 #include "system/filesystem/Filesystem.h"
 
 #include <algorithm>
-#include <cctype>
+#include <filesystem>
 #include <windows.h>
 
 namespace gsm::system {
 
 bool directoryExists(const Path& path)
 {
-    const DWORD attributes = GetFileAttributesA(path.c_str());
-    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    std::error_code ec;
+    return std::filesystem::is_directory(path, ec);
 }
 
 bool ensureDirectoryExists(const Path& path)
 {
-    const Path normalized = normalizePath(path);
-    if (normalized.empty() || directoryExists(normalized)) {
-        return true;
-    }
-
-    const std::size_t separator = normalized.find_last_of("\\/");
-    if (separator != std::string::npos) {
-        const Path parent = normalized.substr(0, separator);
-        if (!parent.empty() && !directoryExists(parent) && !ensureDirectoryExists(parent)) {
-            return false;
-        }
-    }
-
-    if (CreateDirectoryA(normalized.c_str(), nullptr) != 0) {
-        return true;
-    }
-
-    return GetLastError() == ERROR_ALREADY_EXISTS;
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    return std::filesystem::is_directory(path, ec);
 }
 
 bool fileExists(const Path& path)
 {
-    const DWORD attributes = GetFileAttributesA(path.c_str());
-    return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0;
+    std::error_code ec;
+    return std::filesystem::is_regular_file(path, ec);
 }
 
 std::vector<Path> listFilesWithPrefixSuffix(const Path& directory, const std::string& prefix, const std::string& suffix)
 {
     std::vector<Path> files;
-    const Path normalizedDirectory = normalizePath(directory);
-    const Path searchPath = joinPath(normalizedDirectory, prefix + "*" + suffix);
+    std::error_code ec;
 
-    WIN32_FIND_DATAA findData;
-    HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
-    if (findHandle == INVALID_HANDLE_VALUE) {
+    auto it = std::filesystem::directory_iterator(directory, ec);
+    if (ec) {
         return files;
     }
 
-    do {
-        const bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        if (!isDirectory) {
-            files.push_back(joinPath(normalizedDirectory, findData.cFileName));
+    for (const auto& entry : it) {
+        if (!entry.is_regular_file(ec)) {
+            continue;
         }
-    } while (FindNextFileA(findHandle, &findData) != 0);
 
-    FindClose(findHandle);
+        std::string fileName = entry.path().filename().string();
+        
+        bool matchesPrefix = prefix.empty() || (fileName.size() >= prefix.size() && fileName.substr(0, prefix.size()) == prefix);
+        bool matchesSuffix = suffix.empty() || (fileName.size() >= suffix.size() && fileName.substr(fileName.size() - suffix.size()) == suffix);
+
+        if (matchesPrefix && matchesSuffix && fileName.size() >= prefix.size() + suffix.size()) {
+            files.push_back(entry.path().string());
+        }
+    }
+
     std::sort(files.begin(), files.end());
     return files;
 }
 
 Path normalizePath(const Path& path)
 {
-    Path normalized = path;
-    std::replace(normalized.begin(), normalized.end(), '/', '\\');
+    std::filesystem::path p(path);
+    std::string normalized = p.make_preferred().string();
 
     while (normalized.size() > 1 && (normalized.back() == '\\' || normalized.back() == '/')) {
         if (normalized.size() == 3 && normalized[1] == ':') {
-            break;
+            break; // Keep 'C:\'
         }
         normalized.pop_back();
     }
@@ -81,76 +71,37 @@ Path normalizePath(const Path& path)
 
 Path joinPath(const Path& left, const std::string& right)
 {
-    if (left.empty()) {
-        return right;
-    }
-
-    if (left.back() == '\\' || left.back() == '/') {
-        return left + right;
-    }
-
-    return left + "\\" + right;
+    if (left.empty()) return right;
+    return (std::filesystem::path(left) / right).string();
 }
 
 std::string fileExtension(const std::string& fileName)
 {
-    const std::size_t slashPosition = fileName.find_last_of("\\/");
-    const std::size_t dotPosition = fileName.find_last_of('.');
-
-    if (dotPosition == std::string::npos) {
-        return {};
-    }
-
-    if (slashPosition != std::string::npos && dotPosition < slashPosition) {
-        return {};
-    }
-
-    return fileName.substr(dotPosition);
+    return std::filesystem::path(fileName).extension().string();
 }
-
-namespace {
-
-void accumulateDirectorySize(const Path& directory, std::uintmax_t& total)
-{
-    const Path searchPath = joinPath(directory, "*");
-    WIN32_FIND_DATAA findData;
-    HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
-
-    if (findHandle == INVALID_HANDLE_VALUE) {
-        return;
-    }
-
-    do {
-        const std::string fileName = findData.cFileName;
-        if (fileName == "." || fileName == "..") {
-            continue;
-        }
-
-        const bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        const bool isReparsePoint = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
-
-        if (isDirectory) {
-            if (!isReparsePoint) {
-                accumulateDirectorySize(joinPath(directory, fileName), total);
-            }
-            continue;
-        }
-
-        ULARGE_INTEGER size;
-        size.HighPart = findData.nFileSizeHigh;
-        size.LowPart = findData.nFileSizeLow;
-        total += size.QuadPart;
-    } while (FindNextFileA(findHandle, &findData) != 0);
-
-    FindClose(findHandle);
-}
-
-} // namespace
 
 std::uintmax_t directorySize(const Path& path)
 {
     std::uintmax_t total = 0;
-    accumulateDirectorySize(normalizePath(path), total);
+    std::error_code ec;
+
+    if (!std::filesystem::is_directory(path, ec)) {
+        return total;
+    }
+
+    auto opts = std::filesystem::directory_options::skip_permission_denied;
+    for (const auto& entry : std::filesystem::recursive_directory_iterator(path, opts, ec)) {
+        if (entry.is_regular_file(ec)) {
+            DWORD high = 0;
+            DWORD low = GetCompressedFileSizeW(entry.path().wstring().c_str(), &high);
+            if (low != INVALID_FILE_SIZE || GetLastError() == NO_ERROR) {
+                total += (static_cast<std::uintmax_t>(high) << 32) | low;
+            } else {
+                total += entry.file_size(ec);
+            }
+        }
+    }
+
     return total;
 }
 
