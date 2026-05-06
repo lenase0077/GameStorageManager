@@ -11,6 +11,7 @@ find_package(Qt6 COMPONENTS Widgets Concurrent QUIET)
 add_library(gsm_core STATIC
     core/scanner/SteamScanner.cpp
     core/analyzer/GameAnalyzer.cpp
+    core/compressor/CompressionTask.cpp
     core/rules_engine/RecommendationEngine.cpp
     core/safety/SafetyMetadataStore.cpp
     system/filesystem/Filesystem.cpp
@@ -51,6 +52,8 @@ if(Qt6_FOUND)
         app/gui/main.cpp
         ui/controllers/AnalysisController.cpp
         ui/controllers/AnalysisController.h
+        ui/controllers/CompressionController.cpp
+        ui/controllers/CompressionController.h
         ui/views/MainWindow.cpp
         ui/views/MainWindow.h
     )

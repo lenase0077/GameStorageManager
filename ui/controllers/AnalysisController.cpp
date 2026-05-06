@@ -7,13 +7,14 @@
 
 namespace gsm::ui {
 
-QFuture<gsm::core::GameAnalysis> AnalysisController::analyzeFolder(const QString& folderPath) const
+QFuture<gsm::core::GameAnalysis> AnalysisController::analyzeFolder(const QString& folderPath, const QString& gameName) const
 {
     const std::string path = folderPath.toStdString();
+    const std::string name = gameName.toStdString();
 
-    return QtConcurrent::run([path]() {
+    return QtConcurrent::run([path, name]() {
         gsm::core::GameAnalyzer analyzer;
-        return analyzer.analyze(path);
+        return analyzer.analyze(path, name);
     });
 }
 

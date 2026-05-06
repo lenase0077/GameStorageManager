@@ -11,7 +11,7 @@ namespace gsm::ui {
 
 class AnalysisController {
 public:
-    QFuture<gsm::core::GameAnalysis> analyzeFolder(const QString& folderPath) const;
+    QFuture<gsm::core::GameAnalysis> analyzeFolder(const QString& folderPath, const QString& gameName = {}) const;
     QFuture<std::vector<gsm::core::GameEntry>> scanSteamGames() const;
 };
 

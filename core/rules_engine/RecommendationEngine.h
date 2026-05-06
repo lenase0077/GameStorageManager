@@ -42,6 +42,7 @@ struct CompressionRecommendation {
 class RecommendationEngine {
 public:
     CompressionRecommendation recommend(const GameAnalysis& analysis, OptimizationProfile profile) const;
+    CompressionRecommendation recommendWithAlgorithm(const GameAnalysis& analysis, CompressionAlgorithm algorithm) const;
 };
 
 std::string toString(CompressionAlgorithm algorithm);

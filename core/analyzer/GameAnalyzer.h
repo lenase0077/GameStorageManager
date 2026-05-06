@@ -9,7 +9,7 @@ namespace gsm::core {
 
 class GameAnalyzer {
 public:
-    GameAnalysis analyze(const gsm::system::Path& rootPath) const;
+    GameAnalysis analyze(const gsm::system::Path& rootPath, const std::string& gameName = "") const;
     static bool isKnownCompressedExtension(const std::string& extension);
 };
 

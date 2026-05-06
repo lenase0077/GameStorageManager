@@ -15,6 +15,7 @@ struct ExtensionStats {
 struct GameAnalysis {
     bool isValid = false;
     std::string rootPath;
+    std::string gameName;
     std::string errorMessage;
 
     std::uintmax_t totalBytes = 0;
@@ -26,9 +27,15 @@ struct GameAnalysis {
     std::uintmax_t alreadyCompressedBytes = 0;
     std::uintmax_t largestFileBytes = 0;
 
+    std::uint64_t ntfsCompressedFileCount = 0;
+    std::uintmax_t ntfsCompressedBytes = 0;
+
+    bool containsAntiCheatFiles = false;
+
     std::vector<ExtensionStats> extensions;
 
     double alreadyCompressedByteRatio() const;
+    double ntfsCompressedByteRatio() const;
 };
 
 } // namespace gsm::core

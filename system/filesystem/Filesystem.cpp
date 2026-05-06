@@ -108,4 +108,50 @@ std::string fileExtension(const std::string& fileName)
     return fileName.substr(dotPosition);
 }
 
+namespace {
+
+void accumulateDirectorySize(const Path& directory, std::uintmax_t& total)
+{
+    const Path searchPath = joinPath(directory, "*");
+    WIN32_FIND_DATAA findData;
+    HANDLE findHandle = FindFirstFileA(searchPath.c_str(), &findData);
+
+    if (findHandle == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    do {
+        const std::string fileName = findData.cFileName;
+        if (fileName == "." || fileName == "..") {
+            continue;
+        }
+
+        const bool isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool isReparsePoint = (findData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+
+        if (isDirectory) {
+            if (!isReparsePoint) {
+                accumulateDirectorySize(joinPath(directory, fileName), total);
+            }
+            continue;
+        }
+
+        ULARGE_INTEGER size;
+        size.HighPart = findData.nFileSizeHigh;
+        size.LowPart = findData.nFileSizeLow;
+        total += size.QuadPart;
+    } while (FindNextFileA(findHandle, &findData) != 0);
+
+    FindClose(findHandle);
+}
+
+} // namespace
+
+std::uintmax_t directorySize(const Path& path)
+{
+    std::uintmax_t total = 0;
+    accumulateDirectorySize(normalizePath(path), total);
+    return total;
+}
+
 } // namespace gsm::system
