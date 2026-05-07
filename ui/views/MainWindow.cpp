@@ -507,8 +507,13 @@ void MainWindow::finishAnalysis()
     const gsm::core::GameAnalysis analysis = analysisWatcher_.result();
     if (!analysis.isValid) {
         statusLabel_->setText("Error");
-        QMessageBox::warning(this, "Analysis failed", QString::fromStdString(analysis.errorMessage));
+        if (analysis.errorMessage != "Analysis cancelled by user.") {
+            QMessageBox::warning(this, "Analysis failed", QString::fromStdString(analysis.errorMessage));
+        }
         analyzingRow_ = -1;
+        if (!pendingAnalysisRows_.empty()) {
+            processNextAnalysis();
+        }
         return;
     }
 
@@ -538,6 +543,10 @@ void MainWindow::finishAnalysis()
         engine.recommendWithAlgorithm(analysis, currentAlgorithm_);
     updateActiveState(analysis, rec);
     statusLabel_->setText("Ready");
+
+    if (!pendingAnalysisRows_.empty()) {
+        processNextAnalysis();
+    }
 }
 
 void MainWindow::finishSteamScan()
@@ -782,6 +791,7 @@ void MainWindow::loadLibrary()
     }
     
     refreshTableView();
+    applyStoredMetadata();
 }
 
 void MainWindow::saveLibrary()
@@ -1001,7 +1011,11 @@ void MainWindow::applyStoredMetadata()
 
     std::map<std::string, gsm::core::SafetyMetadata> metadataByPath;
     for (const auto& meta : allMetadata) {
-        metadataByPath[gsm::system::normalizePath(meta.rootPath)] = meta;
+        std::string lowerPath = gsm::system::normalizePath(meta.rootPath);
+        std::transform(lowerPath.begin(), lowerPath.end(), lowerPath.begin(), [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
+        metadataByPath[lowerPath] = meta;
     }
 
     std::uintmax_t totalSaved = 0;
@@ -1017,7 +1031,10 @@ void MainWindow::applyStoredMetadata()
         if (isHeader) continue;
 
         const QString pathStr = item->data(Qt::UserRole).toString();
-        const std::string normalizedPath = gsm::system::normalizePath(pathStr.toStdString());
+        std::string normalizedPath = gsm::system::normalizePath(pathStr.toStdString());
+        std::transform(normalizedPath.begin(), normalizedPath.end(), normalizedPath.begin(), [](unsigned char character) {
+            return static_cast<char>(std::tolower(character));
+        });
 
         auto it = metadataByPath.find(normalizedPath);
         if (it == metadataByPath.end()) continue;

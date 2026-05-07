@@ -48,30 +48,31 @@ Dependency direction: `ui → core → system abstractions`
 
 ## Roadmap
 
-### Phase 1 — MVP (current)
-- [ ] Manual folder selection, analysis, and optimization
-- [ ] `compact.exe` integration with background execution
+### Phase 1 — MVP
+- [x] Manual folder selection, analysis, and optimization
+- [x] `compact.exe` integration with background execution
 - [x] CMake project with core/system modules
 - [x] Analyzer, rules engine, and compact adapter
-- [ ] Restore with `compact.exe /u /s`
-- [ ] CLI harness for verification
+- [x] Restore with `compact.exe /u /s`
+- [x] CLI harness for verification
 
 ### Phase 2 — Game Scanner
-- [ ] Steam library auto-detection (`libraryfolders.vdf`)
-- [ ] Epic Games detection
-- [ ] Per-game saved space metrics
-- [ ] Historical optimization records
+- [x] Steam library auto-detection (`libraryfolders.vdf`)
+- [ ] Epic Games detection (Planned)
+- [x] Per-game saved space metrics
+- [x] Historical optimization records (Persistent JSON Metadata)
 
 ### Phase 3 — Smart Rules
-- [ ] Profiles: Performance, Balanced, Storage
+- [x] Profiles: Fast, Balanced, Strong, Max
+- [x] Safe cancellation mechanisms and fallback checks
 - [ ] Anti-cheat and DirectStorage risk detection
-- [ ] CPU/disk performance warnings
-- [ ] Reason codes for every recommendation
+- [x] Reason codes for every recommendation
 
-### Phase 4 — Polish
-- [ ] Qt dark minimal UI
+### Phase 4 — Polish (Current)
+- [x] Qt dark minimal UI (Catppuccin Mocha style)
+- [x] Queue system for Batch Analysis
 - [ ] Pause/resume task queue
-- [ ] Crash-safe task recovery
+- [x] SVG crisp icon integration
 - [ ] Installer and release packaging
 
 ## Build from Source
@@ -97,10 +98,8 @@ cmake -B build
 cmake --build build --config Release
 ```
 
-Run the CLI harness:
-
 ```powershell
-.\build\gsm_cli.exe
+.\build-qt\GameStorageManager.exe
 ```
 
 ## Safety Guarantees
@@ -115,7 +114,7 @@ Run the CLI harness:
 
 - **Language:** C++17
 - **Build:** CMake
-- **UI:** Qt 6 (planned)
+- **UI:** Qt 6 (QtWidgets)
 - **Compression:** Windows `compact.exe`
 - **Platform:** Windows only
 
