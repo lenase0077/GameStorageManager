@@ -14,6 +14,7 @@
 #include <QSettings>
 #include <QFile>
 #include <QDir>
+#include <QGraphicsDropShadowEffect>
 
 #include <algorithm>
 #include <cstdint>
@@ -192,6 +193,12 @@ void MainWindow::buildLayout()
 
     auto* metricsFrame = new QFrame(centralWidget);
     metricsFrame->setObjectName("metricsFrame");
+    auto* metricsShadow = new QGraphicsDropShadowEffect(metricsFrame);
+    metricsShadow->setBlurRadius(15);
+    metricsShadow->setColor(QColor(0, 0, 0, 80));
+    metricsShadow->setOffset(0, 4);
+    metricsFrame->setGraphicsEffect(metricsShadow);
+    
     auto* metricsLayout = new QHBoxLayout(metricsFrame);
     metricsLayout->setContentsMargins(16, 8, 16, 8);
     metricsLayout->setSpacing(20);
@@ -214,19 +221,25 @@ void MainWindow::buildLayout()
 
     auto* actionFrame = new QFrame(centralWidget);
     actionFrame->setObjectName("toolbarFrame");
+    auto* actionShadow = new QGraphicsDropShadowEffect(actionFrame);
+    actionShadow->setBlurRadius(15);
+    actionShadow->setColor(QColor(0, 0, 0, 80));
+    actionShadow->setOffset(0, 4);
+    actionFrame->setGraphicsEffect(actionShadow);
+
     auto* actionLayout = new QHBoxLayout(actionFrame);
     actionLayout->setContentsMargins(14, 12, 14, 12);
     actionLayout->setSpacing(10);
 
-    settingsButton_ = new QPushButton("⚙️ Settings", actionFrame);
-    selectFolderButton_ = new QPushButton("Add Game Folder", actionFrame);
-    scanSteamButton_ = new QPushButton("Scan Steam", actionFrame);
-    analyzeSelectedButton_ = new QPushButton("Analyze Selected", actionFrame);
-    analyzeAllButton_ = new QPushButton("Analyze All", actionFrame);
-    optimizeButton_ = new QPushButton("Optimize", actionFrame);
-    restoreButton_ = new QPushButton("Restore", actionFrame);
-    removeButton_ = new QPushButton("Remove", actionFrame);
-    cancelButton_ = new QPushButton("Cancel", actionFrame);
+    settingsButton_ = new QPushButton(QIcon(":/resources/settings-svgrepo-com.svg"), " Settings", actionFrame);
+    selectFolderButton_ = new QPushButton(QIcon(":/resources/folder-open-svgrepo-com.svg"), " Add Game Folder", actionFrame);
+    scanSteamButton_ = new QPushButton(QIcon(":/resources/steam-svgrepo-com.svg"), " Scan Steam", actionFrame);
+    analyzeSelectedButton_ = new QPushButton(QIcon(":/resources/magnifying-glass-svgrepo-com.svg"), " Analyze Selected", actionFrame);
+    analyzeAllButton_ = new QPushButton(QIcon(":/resources/folder-with-files-svgrepo-com.svg"), " Analyze All", actionFrame);
+    optimizeButton_ = new QPushButton(QIcon(":/resources/thunder-svgrepo-com.svg"), " Optimize", actionFrame);
+    restoreButton_ = new QPushButton(QIcon(":/resources/undo-left-round-square-svgrepo-com.svg"), " Restore", actionFrame);
+    removeButton_ = new QPushButton(QIcon(":/resources/trash-bin-trash-svgrepo-com.svg"), " Remove", actionFrame);
+    cancelButton_ = new QPushButton(QIcon(":/resources/stop-circle-svgrepo-com.svg"), " Cancel", actionFrame);
     selectedFolderLabel_ = new QLabel("No folder selected", actionFrame);
     selectedFolderLabel_->setObjectName("pathLabel");
 

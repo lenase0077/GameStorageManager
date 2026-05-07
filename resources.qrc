@@ -1,0 +1,14 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file>resources/theme_dark.qss</file>
+    <file>resources/settings-svgrepo-com.svg</file>
+    <file>resources/folder-open-svgrepo-com.svg</file>
+    <file>resources/steam-svgrepo-com.svg</file>
+    <file>resources/magnifying-glass-svgrepo-com.svg</file>
+    <file>resources/folder-with-files-svgrepo-com.svg</file>
+    <file>resources/thunder-svgrepo-com.svg</file>
+    <file>resources/undo-left-round-square-svgrepo-com.svg</file>
+    <file>resources/trash-bin-trash-svgrepo-com.svg</file>
+    <file>resources/stop-circle-svgrepo-com.svg</file>
+</qresource>
+</RCC>

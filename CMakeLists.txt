@@ -5,6 +5,9 @@ project(GameStorageManager VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 COMPONENTS Widgets Concurrent QUIET)
 
@@ -58,6 +61,7 @@ if(Qt6_FOUND)
         ui/views/MainWindow.h
         ui/views/SettingsDialog.cpp
         ui/views/SettingsDialog.h
+        resources.qrc
     )
 
     target_link_libraries(gsm_app

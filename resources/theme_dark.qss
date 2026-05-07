@@ -1,0 +1,176 @@
+/* Game Storage Manager - Dark Theme */
+
+/* ==============================================
+   GLOBAL VARIABLES & BASE STYLES
+   ============================================== */
+QWidget {
+    background-color: #1E1E2E; /* Base dark background (Catppuccin Mocha style) */
+    color: #CDD6F4;            /* Main text color */
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    font-size: 13px;
+}
+
+/* ==============================================
+   LABELS & TITLES
+   ============================================== */
+QLabel#titleLabel {
+    font-size: 22px;
+    font-weight: bold;
+    color: #89B4FA; /* Accent Blue */
+    margin-bottom: 2px;
+}
+
+QLabel#statusLabel {
+    font-size: 12px;
+    color: #A6ADC8;
+}
+
+QLabel#pathLabel {
+    color: #A6ADC8;
+    font-style: italic;
+    padding-left: 10px;
+}
+
+QLabel#metricValue {
+    font-size: 14px;
+    font-weight: 600;
+    color: #A6E3A1; /* Accent Green for metrics */
+}
+
+/* ==============================================
+   FRAMES & PANELS
+   ============================================== */
+QFrame#toolbarFrame {
+    background-color: #181825; /* Slightly darker than base */
+    border-radius: 8px;
+    border: 1px solid #313244;
+}
+
+QFrame#metricsFrame {
+    background-color: #181825;
+    border-radius: 8px;
+    border: 1px solid #313244;
+}
+
+/* ==============================================
+   BUTTONS
+   ============================================== */
+QPushButton {
+    background-color: #313244;
+    color: #CDD6F4;
+    border: 1px solid #45475A;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-weight: 500;
+}
+
+QPushButton:hover {
+    background-color: #45475A;
+    border: 1px solid #585B70;
+}
+
+QPushButton:pressed {
+    background-color: #585B70;
+}
+
+QPushButton:disabled {
+    background-color: #181825;
+    color: #585B70;
+    border: 1px solid #313244;
+}
+
+/* Specific Action Buttons */
+QPushButton[text="Optimize"] {
+    background-color: #A6E3A1;
+    color: #11111B;
+    border: none;
+}
+QPushButton[text="Optimize"]:hover {
+    background-color: #94E2D5;
+}
+
+QPushButton[text="Cancel"] {
+    background-color: #F38BA8;
+    color: #11111B;
+    border: none;
+}
+QPushButton[text="Cancel"]:hover {
+    background-color: #EBA0AC;
+}
+
+/* ==============================================
+   COMBOBOX
+   ============================================== */
+QComboBox {
+    background-color: #313244;
+    color: #CDD6F4;
+    border: 1px solid #45475A;
+    border-radius: 6px;
+    padding: 5px 10px;
+}
+
+QComboBox:hover {
+    border: 1px solid #89B4FA;
+}
+
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #313244;
+    color: #CDD6F4;
+    selection-background-color: #45475A;
+    border: 1px solid #45475A;
+    border-radius: 4px;
+}
+
+/* ==============================================
+   TABLE WIDGET
+   ============================================== */
+QTableWidget {
+    background-color: #181825;
+    alternate-background-color: #1E1E2E;
+    color: #CDD6F4;
+    border: 1px solid #313244;
+    border-radius: 8px;
+    gridline-color: #313244;
+    outline: none; /* remove focus dotted line */
+}
+
+QTableWidget::item {
+    padding: 4px;
+    border: none;
+}
+
+QTableWidget::item:selected {
+    background-color: #313244;
+    color: #89B4FA;
+}
+
+QHeaderView::section {
+    background-color: #11111B;
+    color: #A6ADC8;
+    padding: 6px;
+    border: none;
+    border-right: 1px solid #313244;
+    border-bottom: 2px solid #313244;
+    font-weight: bold;
+}
+
+/* ==============================================
+   PROGRESS BAR
+   ============================================== */
+QProgressBar {
+    background-color: #313244;
+    border-radius: 4px;
+    border: none;
+    text-align: center;
+    color: transparent; /* hide text if needed */
+}
+
+QProgressBar::chunk {
+    background-color: #89B4FA;
+    border-radius: 4px;
+}
