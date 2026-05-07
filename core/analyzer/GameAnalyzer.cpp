@@ -66,7 +66,8 @@ std::string normalizeExtension(const std::string& fileName)
 void analyzeDirectory(
     const gsm::system::Path& directory,
     GameAnalysis& analysis,
-    std::map<std::string, ExtensionStats>& extensionStats)
+    std::map<std::string, ExtensionStats>& extensionStats,
+    std::atomic<bool>* cancelFlag)
 {
     std::error_code ec;
 
@@ -83,6 +84,12 @@ void analyzeDirectory(
 
     // Process the root directory first? No, just iterate
     for (auto& entry : it) {
+        if (cancelFlag && cancelFlag->load()) {
+            analysis.isValid = false;
+            analysis.errorMessage = "Analysis cancelled by user.";
+            return;
+        }
+
         if (ec) {
             ++analysis.inaccessibleEntryCount;
             // Clear the error to continue
@@ -160,7 +167,7 @@ double GameAnalysis::ntfsCompressedByteRatio() const
     return static_cast<double>(ntfsCompressedBytes) / static_cast<double>(totalBytes);
 }
 
-GameAnalysis GameAnalyzer::analyze(const gsm::system::Path& rootPath, const std::string& gameName) const
+GameAnalysis GameAnalyzer::analyze(const gsm::system::Path& rootPath, const std::string& gameName, std::atomic<bool>* cancelFlag) const
 {
     GameAnalysis analysis;
     analysis.rootPath = gsm::system::normalizePath(rootPath);
@@ -173,7 +180,7 @@ GameAnalysis GameAnalyzer::analyze(const gsm::system::Path& rootPath, const std:
 
     analysis.isValid = true;
     std::map<std::string, ExtensionStats> extensionStats;
-    analyzeDirectory(analysis.rootPath, analysis, extensionStats);
+    analyzeDirectory(analysis.rootPath, analysis, extensionStats, cancelFlag);
 
     analysis.extensions.reserve(extensionStats.size());
     for (const auto& pair : extensionStats) {

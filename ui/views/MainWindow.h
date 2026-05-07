@@ -42,6 +42,9 @@ private:
     void refreshTableView();
     void updateGameRow(int row, const gsm::core::GameAnalysis& analysis);
     void setBusy(bool busy);
+    
+    void onAnalyzeAll();
+    void processNextAnalysis();
     void updateActiveState(const gsm::core::GameAnalysis& analysis,
                            const gsm::core::CompressionRecommendation& recommendation);
     void updateRowStatus(int row, const QString& status);
@@ -61,6 +64,7 @@ private:
     QString selectedFolder_;
     int analyzingRow_ = -1;
     int activeRow_ = -1;
+    std::vector<int> pendingAnalysisRows_;
     std::optional<gsm::core::GameAnalysis> activeAnalysis_;
     std::optional<gsm::core::CompressionRecommendation> activeRecommendation_;
 
@@ -73,6 +77,8 @@ private:
     QFutureWatcher<gsm::core::CompressionResult> compressWatcher_;
     QFutureWatcher<gsm::core::CompressionResult> restoreWatcher_;
 
+    void onSettings();
+
     QLabel* statusLabel_ = nullptr;
     QLabel* totalSavedLabel_ = nullptr;
     QLabel* gamesCountLabel_ = nullptr;
@@ -80,13 +86,16 @@ private:
     QLabel* ratioLabel_ = nullptr;
     QLabel* selectedFolderLabel_ = nullptr;
     QProgressBar* progressBar_ = nullptr;
+    QPushButton* settingsButton_ = nullptr;
     QPushButton* selectFolderButton_ = nullptr;
     QPushButton* scanSteamButton_ = nullptr;
     QPushButton* analyzeButton_ = nullptr;
     QPushButton* analyzeSelectedButton_ = nullptr;
+    QPushButton* analyzeAllButton_ = nullptr;
     QPushButton* optimizeButton_ = nullptr;
     QPushButton* restoreButton_ = nullptr;
     QPushButton* removeButton_ = nullptr;
+    QPushButton* cancelButton_ = nullptr;
     QComboBox* profileCombo_ = nullptr;
     QTableWidget* gamesTable_ = nullptr;
 

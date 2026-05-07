@@ -61,7 +61,7 @@ CompactCommand CompactProcessAdapter::buildRestoreCommand(const gsm::system::Pat
     return command;
 }
 
-ProcessResult CompactProcessAdapter::run(const CompactCommand& command, std::function<void(const std::string&)> onOutput) const
+ProcessResult CompactProcessAdapter::run(const CompactCommand& command, std::function<void(const std::string&)> onOutput, std::atomic<bool>* cancelFlag) const
 {
     ProcessResult result;
     const std::string displayCommand = toDisplayString(command);
@@ -132,6 +132,21 @@ ProcessResult CompactProcessAdapter::run(const CompactCommand& command, std::fun
     bSuccess = FALSE;
 
     for (;;) {
+        if (cancelFlag && cancelFlag->load()) {
+            TerminateProcess(piProcInfo.hProcess, 1);
+            result.output += "\n[Operation cancelled by user]\n";
+            result.exitCode = 1;
+            break;
+        }
+
+        DWORD bytesAvailable = 0;
+        if (!PeekNamedPipe(hReadPipe, NULL, 0, NULL, &bytesAvailable, NULL)) break;
+        
+        if (bytesAvailable == 0) {
+            if (WaitForSingleObject(piProcInfo.hProcess, 0) == WAIT_OBJECT_0) break;
+            Sleep(10);
+            continue;
+        }
         bSuccess = ReadFile(hReadPipe, chBuf, sizeof(chBuf) - 1, &dwRead, NULL);
         if (!bSuccess || dwRead == 0) break;
         chBuf[dwRead] = '\0';

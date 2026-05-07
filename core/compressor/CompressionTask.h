@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <functional>
+#include <atomic>
 
 namespace gsm::core {
 
@@ -25,17 +26,20 @@ struct CompressionResult {
 
 class Compressor {
 public:
+
     CompressionResult compress(
         const GameAnalysis& analysis,
         const CompressionRecommendation& recommendation,
         SafetyMetadataStore& metadataStore,
-        std::function<void(size_t)> onProgress = nullptr) const;
+        std::function<void(size_t)> onProgress = nullptr,
+        std::atomic<bool>* cancelFlag = nullptr) const;
 
     CompressionResult restore(
         const SafetyMetadata& metadata,
         SafetyMetadataStore& metadataStore,
         const gsm::system::Path& targetPath,
-        std::function<void(size_t)> onProgress = nullptr) const;
+        std::function<void(size_t)> onProgress = nullptr,
+        std::atomic<bool>* cancelFlag = nullptr) const;
 
 private:
     gsm::system::CompactProcessAdapter adapter_;

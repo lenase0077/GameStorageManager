@@ -56,6 +56,8 @@ if(Qt6_FOUND)
         ui/controllers/CompressionController.h
         ui/views/MainWindow.cpp
         ui/views/MainWindow.h
+        ui/views/SettingsDialog.cpp
+        ui/views/SettingsDialog.h
     )
 
     target_link_libraries(gsm_app

@@ -25,7 +25,8 @@ CompressionResult Compressor::compress(
     const GameAnalysis& analysis,
     const CompressionRecommendation& recommendation,
     SafetyMetadataStore& metadataStore,
-    std::function<void(size_t)> onProgress) const
+    std::function<void(size_t)> onProgress,
+    std::atomic<bool>* cancelFlag) const
 {
     CompressionResult result;
     result.bytesBefore = analysis.totalBytes;
@@ -79,7 +80,7 @@ CompressionResult Compressor::compress(
     };
 
     const auto command = adapter_.buildCompressCommand(analysis.rootPath, algorithm);
-    const auto processResult = adapter_.run(command, outputCallback);
+    const auto processResult = adapter_.run(command, outputCallback, cancelFlag);
 
     result.exitCode = processResult.exitCode;
     result.output = processResult.output;
@@ -120,7 +121,8 @@ CompressionResult Compressor::restore(
     const SafetyMetadata& metadata,
     SafetyMetadataStore& metadataStore,
     const gsm::system::Path& targetPath,
-    std::function<void(size_t)> onProgress) const
+    std::function<void(size_t)> onProgress,
+    std::atomic<bool>* cancelFlag) const
 {
     CompressionResult result;
     result.bytesBefore = metadata.sizeAfterBytes;
@@ -142,7 +144,7 @@ CompressionResult Compressor::restore(
     };
 
     const auto command = adapter_.buildRestoreCommand(targetPath);
-    const auto processResult = adapter_.run(command, outputCallback);
+    const auto processResult = adapter_.run(command, outputCallback, cancelFlag);
 
     result.exitCode = processResult.exitCode;
     result.output = processResult.output;

@@ -23,25 +23,34 @@ gsm::system::Path appStorageRoot()
 QFuture<gsm::core::CompressionResult> CompressionController::compress(
     const gsm::core::GameAnalysis& analysis,
     const gsm::core::CompressionRecommendation& recommendation,
-    std::function<void(size_t)> onProgress) const
+    std::function<void(size_t)> onProgress)
 {
-    return QtConcurrent::run([analysis, recommendation, onProgress]() {
+    cancelFlag_->store(false);
+    auto flag = cancelFlag_;
+    return QtConcurrent::run([analysis, recommendation, onProgress, flag]() {
         gsm::core::Compressor compressor;
         gsm::core::SafetyMetadataStore store(appStorageRoot());
-        return compressor.compress(analysis, recommendation, store, onProgress);
+        return compressor.compress(analysis, recommendation, store, onProgress, flag.get());
     });
 }
 
 QFuture<gsm::core::CompressionResult> CompressionController::restore(
     const gsm::core::SafetyMetadata& metadata,
-    std::function<void(size_t)> onProgress) const
+    std::function<void(size_t)> onProgress)
 {
     const std::string targetPath = metadata.rootPath;
-    return QtConcurrent::run([metadata, targetPath, onProgress]() {
+    cancelFlag_->store(false);
+    auto flag = cancelFlag_;
+    return QtConcurrent::run([metadata, targetPath, onProgress, flag]() {
         gsm::core::Compressor compressor;
         gsm::core::SafetyMetadataStore store(appStorageRoot());
-        return compressor.restore(metadata, store, targetPath, onProgress);
+        return compressor.restore(metadata, store, targetPath, onProgress, flag.get());
     });
+}
+
+void CompressionController::cancel()
+{
+    cancelFlag_->store(true);
 }
 
 } // namespace gsm::ui

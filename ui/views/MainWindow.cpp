@@ -1,4 +1,5 @@
 #include "ui/views/MainWindow.h"
+#include "ui/views/SettingsDialog.h"
 
 #include <QFileDialog>
 #include <QFrame>
@@ -10,6 +11,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSettings>
 #include <QFile>
 #include <QDir>
 
@@ -117,6 +119,10 @@ MainWindow::MainWindow(QWidget* parent)
         onAnalyzeSelected();
     });
 
+    connect(analyzeAllButton_, &QPushButton::clicked, this, [this]() {
+        onAnalyzeAll();
+    });
+
     connect(&analysisWatcher_, &QFutureWatcher<gsm::core::GameAnalysis>::finished, this, [this]() {
         finishAnalysis();
     });
@@ -143,6 +149,18 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(removeButton_, &QPushButton::clicked, this, [this]() {
         onRemoveGame();
+    });
+
+    connect(settingsButton_, &QPushButton::clicked, this, [this]() {
+        onSettings();
+    });
+
+    connect(cancelButton_, &QPushButton::clicked, this, [this]() {
+        analysisController_.cancel();
+        compressionController_.cancel();
+        pendingAnalysisRows_.clear();
+        statusLabel_->setText("Cancelling...");
+        cancelButton_->setEnabled(false);
     });
 
     connect(profileCombo_, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
@@ -200,32 +218,43 @@ void MainWindow::buildLayout()
     actionLayout->setContentsMargins(14, 12, 14, 12);
     actionLayout->setSpacing(10);
 
+    settingsButton_ = new QPushButton("⚙️ Settings", actionFrame);
     selectFolderButton_ = new QPushButton("Add Game Folder", actionFrame);
     scanSteamButton_ = new QPushButton("Scan Steam", actionFrame);
-    analyzeButton_ = new QPushButton("Analyze", actionFrame);
     analyzeSelectedButton_ = new QPushButton("Analyze Selected", actionFrame);
+    analyzeAllButton_ = new QPushButton("Analyze All", actionFrame);
     optimizeButton_ = new QPushButton("Optimize", actionFrame);
     restoreButton_ = new QPushButton("Restore", actionFrame);
     removeButton_ = new QPushButton("Remove", actionFrame);
+    cancelButton_ = new QPushButton("Cancel", actionFrame);
     selectedFolderLabel_ = new QLabel("No folder selected", actionFrame);
     selectedFolderLabel_->setObjectName("pathLabel");
 
     optimizeButton_->setEnabled(false);
     restoreButton_->setEnabled(false);
+    cancelButton_->setEnabled(false);
 
     profileCombo_ = new QComboBox(actionFrame);
     profileCombo_->addItem("Fast (XPRESS4K)");
     profileCombo_->addItem("Balanced (XPRESS8K)");
     profileCombo_->addItem("Strong (XPRESS16K)");
     profileCombo_->addItem("Max (LZX)");
+    
+    QSettings settings("GameStorageManager", "App");
+    int defaultAlgo = settings.value("defaultAlgorithm", 1).toInt();
+    if (defaultAlgo >= 0 && defaultAlgo < profileCombo_->count()) {
+        profileCombo_->setCurrentIndex(defaultAlgo);
+    }
 
+    actionLayout->addWidget(settingsButton_);
     actionLayout->addWidget(selectFolderButton_);
     actionLayout->addWidget(scanSteamButton_);
-    actionLayout->addWidget(analyzeButton_);
     actionLayout->addWidget(analyzeSelectedButton_);
+    actionLayout->addWidget(analyzeAllButton_);
     actionLayout->addWidget(optimizeButton_);
     actionLayout->addWidget(restoreButton_);
     actionLayout->addWidget(removeButton_);
+    actionLayout->addWidget(cancelButton_);
     actionLayout->addWidget(profileCombo_);
     actionLayout->addWidget(selectedFolderLabel_, 1);
     rootLayout->addWidget(actionFrame);
@@ -799,6 +828,57 @@ void MainWindow::onAnalyzeSelected()
     startAnalysis(path, gameName);
 }
 
+void MainWindow::onAnalyzeAll()
+{
+    pendingAnalysisRows_.clear();
+    for (int r = 0; r < gamesTable_->rowCount(); ++r) {
+        auto* item = gamesTable_->item(r, 0);
+        if (item && !item->data(Qt::UserRole + 1).toBool()) {
+            pendingAnalysisRows_.push_back(r);
+        }
+    }
+    
+    if (!pendingAnalysisRows_.empty()) {
+        processNextAnalysis();
+    } else {
+        QMessageBox::information(this, "Analyze All", "No games to analyze in the library.");
+    }
+}
+
+void MainWindow::processNextAnalysis()
+{
+    if (pendingAnalysisRows_.empty()) {
+        statusLabel_->setText("Ready");
+        return;
+    }
+
+    int row = pendingAnalysisRows_.front();
+    pendingAnalysisRows_.erase(pendingAnalysisRows_.begin());
+
+    auto* item = gamesTable_->item(row, 0);
+    if (!item) {
+        processNextAnalysis(); // Skip invalid
+        return;
+    }
+
+    const QString gameName = item->text();
+    const QString path = item->data(Qt::UserRole).toString();
+
+    if (!QDir(path).exists()) {
+        updateRowStatus(row, "Not found (Missing)");
+        processNextAnalysis(); // Skip missing
+        return;
+    }
+
+    // Scroll to the row being analyzed so the user sees progress
+    gamesTable_->scrollToItem(item);
+    gamesTable_->selectRow(row);
+    activeRow_ = row;
+
+    analyzingRow_ = row;
+    startAnalysis(path, gameName);
+}
+
 void MainWindow::updateGameRow(int row, const gsm::core::GameAnalysis& analysis)
 {
     gsm::core::RecommendationEngine engine;
@@ -1287,16 +1367,28 @@ void MainWindow::setBusy(bool busy)
 {
     selectFolderButton_->setEnabled(!busy);
     scanSteamButton_->setEnabled(!busy);
-    analyzeButton_->setEnabled(!busy && !selectedFolder_.isEmpty());
     analyzeSelectedButton_->setEnabled(!busy);
+    analyzeAllButton_->setEnabled(!busy);
+    settingsButton_->setEnabled(!busy);
     if (busy) {
         optimizeButton_->setEnabled(false);
         restoreButton_->setEnabled(false);
     }
+    cancelButton_->setEnabled(busy);
     removeButton_->setEnabled(!busy);
     profileCombo_->setEnabled(!busy);
     progressBar_->setRange(busy ? 0 : 0, busy ? 0 : 1);
     progressBar_->setValue(busy ? 0 : 1);
+}
+
+void MainWindow::onSettings()
+{
+    SettingsDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        int index = dialog.defaultAlgorithmIndex();
+        profileCombo_->setCurrentIndex(index);
+        onProfileChanged(index);
+    }
 }
 
 } // namespace gsm::ui
