@@ -1,76 +1,76 @@
 # Game Storage Manager
 
-> Optimiza tu librería de juegos automáticamente sin comprometer rendimiento.
+> Automatically optimize your game library without compromising performance.
 
-**Game Storage Manager** es una herramienta de escritorio para Windows que recupera espacio en disco de tus juegos instalados usando compresión NTFS — sin romper nada, y siempre reversible.
+**Game Storage Manager** is a Windows desktop tool that reclaims disk space from your installed games using NTFS compression — safe, transparent, and always reversible.
 
-## Migración a Python
+## Migration to Python
 
-Este proyecto fue migrado de C++ a Python. La versión original en C++ se encuentra en la rama `cpp-legacy`.
+This project was migrated from C++ to Python. The original C++ version lives in the `cpp-legacy` branch.
 
-### Cambios principales
+### Key changes
 
-- **Lenguaje:** C++17 → Python 3.11+
+- **Language:** C++17 → Python 3.11+
 - **UI:** Qt6 (C++) → PySide6 (Python)
 - **Build:** CMake → setuptools + PyInstaller
-- **APIs Windows:** Win32 nativo → ctypes + winreg + subprocess
-- **Compatibilidad:** 100% compatible con archivos `.gsmmeta` y `library.json` existentes
+- **Windows APIs:** Native Win32 → ctypes + winreg + subprocess
+- **Compatibility:** 100% compatible with existing `.gsmmeta` and `library.json` files
 
-## Cómo funciona
+## How it works
 
-Game Storage Manager usa `compact.exe` de Windows para aplicar compresión NTFS a carpetas de juegos. A diferencia de herramientas genéricas, analiza cada juego y elige el algoritmo adecuado:
+Game Storage Manager uses Windows' `compact.exe` to apply NTFS compression to game folders. Unlike generic tools, it analyzes each game and picks the right algorithm:
 
-| Algoritmo | Mejor para |
-|-----------|------------|
-| **XPRESS4K** | Juegos ligeros/indie, descompresión más rápida |
-| **XPRESS8K** | Juegos AAA modernos (por defecto) |
-| **XPRESS16K** | Compresión más fuerte con costo moderado de CPU |
-| **LZX** | Juegos archivados o raramente jugados, máximo ahorro |
+| Algorithm | Best for |
+|-----------|----------|
+| **XPRESS4K** | Light/indie games, fastest decompression |
+| **XPRESS8K** | Modern AAA titles (default) |
+| **XPRESS16K** | Stronger compression with moderate CPU cost |
+| **LZX** | Archived or rarely played games, maximum savings |
 
-La app escanea tus librerías de Steam/Epic, analiza la estructura de archivos de cada juego, detecta patrones riesgosos (anti-cheat, DirectStorage, assets ya comprimidos), y recomienda qué es seguro optimizar.
+The app scans your Steam/Epic libraries, analyzes each game's file structure, detects risky patterns (anti-cheat, DirectStorage, already-compressed assets), and recommends what's safe to optimize.
 
-## Principios fundamentales
+## Core principles
 
-- **Nunca romper un juego.** Toda compresión es reversible con un solo clic.
-- **Nunca bloquear la UI.** El análisis y la compresión se ejecutan en hilos de fondo.
-- **Defaults inteligentes.** Sin perillas de algoritmos crudos — solo recomendaciones claras y contextuales.
-- **Transparencia total.** Ve tamaño actual, ahorros estimados, códigos de razón e historial de operaciones.
+- **Never break a game.** All compression is reversible with a single click.
+- **Never block the UI.** Analysis and compression run on background threads.
+- **Smart defaults.** No raw algorithm knobs — only clear, contextual recommendations.
+- **Full transparency.** See current size, estimated savings, reason codes, and operation history.
 
-## Arquitectura
+## Architecture
 
 ```
 game_storage_manager/
-  ui/              ← Vistas PySide6, componentes, controladores (nunca llama compact.exe directamente)
-  core/            ← Modelos de juegos, análisis, motor de reglas, lógica de seguridad (testeable sin UI)
-  system/          ← Interacciones con Windows, ejecución de procesos, adaptadores de filesystem
-  app/             ← Entry points (CLI y GUI)
-  resources/       ← Iconos SVG, tema QSS
-  utils.py         ← Utilidades compartidas
+  ui/              ← PySide6 views, components, controllers (never calls compact.exe directly)
+  core/            ← Game models, analysis, rules engine, safety logic (testable without UI)
+  system/          ← Windows interactions, process execution, filesystem adapters
+  app/             ← Entry points (CLI and GUI)
+  resources/       ← SVG icons, QSS theme
+  utils.py         ← Shared utilities
 ```
 
-Dirección de dependencias: `ui → core → abstracciones de system`
+Dependency direction: `ui → core → system abstractions`
 
-### Módulos
+### Modules
 
-| Módulo | Responsabilidad |
+| Module | Responsibility |
 |--------|----------------|
-| `core/scanner` | Detección de librerías Steam, manifests Epic, carpetas manuales |
-| `core/analyzer` | Tamaño, conteo de archivos, distribución de extensiones, detección de assets comprimidos |
-| `core/rules_engine` | Lógica de recomendación, selección de algoritmo, clasificación de riesgo |
-| `core/compressor` | Coordinación de tareas de compresión, seguimiento de progreso |
-| `core/safety` | Metadatos de backup, rollback, validación de acceso |
-| `system/process` | Ejecución segura de `compact.exe`, cancelación, manejo de errores |
-| `system/filesystem` | Recorrido de paths, metadatos, validación |
+| `core/scanner` | Steam library detection, Epic manifests, manual folders |
+| `core/analyzer` | Size, file count, extension distribution, compressed asset detection |
+| `core/rules_engine` | Recommendation logic, algorithm selection, risk classification |
+| `core/compressor` | Compression task coordination, progress tracking |
+| `core/safety` | Backup metadata, rollback, access validation |
+| `system/process` | Safe `compact.exe` execution, cancellation, error handling |
+| `system/filesystem` | Path walking, metadata, validation |
 
-## Instalación
+## Installation
 
-### Desde ejecutable
+### From executable
 
-Descarga `GameStorageManager.exe` desde [Releases](https://github.com/lenase0077/GameStorageManager/releases).
+Download `GameStorageManager.exe` from [Releases](https://github.com/lenase0077/GameStorageManager/releases).
 
-### Desde código fuente
+### From source
 
-#### Requisitos
+#### Requirements
 
 - Windows 10/11
 - Python >= 3.11
@@ -79,28 +79,28 @@ Descarga `GameStorageManager.exe` desde [Releases](https://github.com/lenase0077
 #### Setup
 
 ```powershell
-# Clonar el repositorio
+# Clone the repository
 git clone https://github.com/lenase0077/GameStorageManager.git
 cd GameStorageManager
 
-# Crear entorno virtual
+# Create virtual environment
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 
-# Instalar dependencias
+# Install dependencies
 pip install -e ".[dev]"
 ```
 
-#### Ejecutar
+#### Run
 
 ```powershell
 # GUI
 python -m game_storage_manager.app.gui.main
 
 # CLI
-python -m game_storage_manager.app.cli.main analyze <carpeta>
+python -m game_storage_manager.app.cli.main analyze <folder>
 python -m game_storage_manager.app.cli.main scan-steam
-python -m game_storage_manager.app.cli.main compact-command <compress|restore> <carpeta> [algoritmo]
+python -m game_storage_manager.app.cli.main compact-command <compress|restore> <folder> [algorithm]
 ```
 
 #### Tests
@@ -115,65 +115,65 @@ pytest tests/ -v
 ruff check game_storage_manager/ tests/
 ```
 
-#### Generar ejecutable
+#### Build executable
 
 ```powershell
 pyinstaller --onefile --windowed --name "GameStorageManager" --add-data "game_storage_manager/resources;game_storage_manager/resources" game_storage_manager/app/gui/main.py
 ```
 
-El ejecutable se generará en `dist/GameStorageManager.exe`.
+The executable will be generated at `dist/GameStorageManager.exe`.
 
 ## Roadmap
 
-### Fase 1 — MVP ✓
-- [x] Selección manual de carpetas, análisis y optimización
-- [x] Integración con `compact.exe` con ejecución en fondo
-- [x] Analizador, motor de reglas y adaptador compact
-- [x] Restauración con `compact.exe /u /s`
-- [x] CLI para verificación
+### Phase 1 — MVP ✓
+- [x] Manual folder selection, analysis and optimization
+- [x] `compact.exe` integration with background execution
+- [x] Analyzer, rules engine and compact adapter
+- [x] Restoration with `compact.exe /u /s`
+- [x] CLI for verification
 
-### Fase 2 — Game Scanner ✓
-- [x] Auto-detección de librerías Steam (`libraryfolders.vdf`)
-- [ ] Detección de Epic Games (Planeado)
-- [x] Métricas de espacio ahorrado por juego
-- [x] Registros históricos de optimización (Metadatos JSON persistentes)
+### Phase 2 — Game Scanner ✓
+- [x] Auto-detection of Steam libraries (`libraryfolders.vdf`)
+- [ ] Epic Games detection (Planned)
+- [x] Space saved metrics per game
+- [x] Historical optimization records (persistent JSON metadata)
 
-### Fase 3 — Reglas inteligentes ✓
-- [x] Perfiles: Rápido, Balanceado, Fuerte, Máximo
-- [x] Mecanismos de cancelación segura y verificaciones de fallback
-- [ ] Detección de riesgo de anti-cheat y DirectStorage
-- [x] Códigos de razón para cada recomendación
+### Phase 3 — Smart Rules ✓
+- [x] Profiles: Fast, Balanced, Strong, Maximum
+- [x] Safe cancellation and fallback checks
+- [ ] Anti-cheat and DirectStorage risk detection
+- [x] Reason codes for every recommendation
 
-### Fase 4 — Pulido (Actual)
-- [x] UI oscura minimalista con Qt (estilo Catppuccin Mocha)
-- [x] Sistema de cola para análisis por lotes
-- [ ] Pausar/reanudar cola de tareas
-- [x] Integración de iconos SVG modernos (Lucide)
-- [ ] Instalador y empaquetado de release
-- [x] Migración completa a Python
+### Phase 4 — Polish (Current)
+- [x] Minimalist dark UI with Qt (Catppuccin Mocha theme)
+- [x] Queue system for batch analysis
+- [ ] Pause/resume task queue
+- [x] Modern SVG icon integration (Lucide)
+- [ ] Installer and release packaging
+- [x] Complete migration to Python
 
-## Garantías de seguridad
+## Safety guarantees
 
-- **Sin eliminación de archivos.** Solo se modifican flags de compresión NTFS.
-- **Reversibilidad total.** Restaura el estado original con `compact.exe /u /s`.
-- **Validación antes y después.** Existencia de paths y acceso a archivos verificados.
-- **Consciente de riesgos.** Omite juegos con anti-cheat pesado, títulos DirectStorage y assets ya comprimidos por defecto.
-- **Manejo de fallos parciales.** Si algo falla, lo que succeeded se reporta honestamente.
+- **No file deletion.** Only NTFS compression flags are modified.
+- **Full reversibility.** Restores original state with `compact.exe /u /s`.
+- **Before and after validation.** Path existence and file access are verified.
+- **Risk-aware.** Skips games with heavy anti-cheat, DirectStorage titles, and already-compressed assets by default.
+- **Partial failure handling.** If something fails, what succeeded is reported honestly.
 
-## Stack técnico
+## Tech stack
 
-- **Lenguaje:** Python 3.11+
+- **Language:** Python 3.11+
 - **UI:** PySide6 (Qt6)
-- **Compresión:** Windows `compact.exe`
-- **Empaquetado:** PyInstaller
+- **Compression:** Windows `compact.exe`
+- **Packaging:** PyInstaller
 - **Testing:** pytest
 - **Linting:** ruff
-- **Plataforma:** Solo Windows
+- **Platform:** Windows only
 
-## Contribuir
+## Contributing
 
-Este proyecto sigue reglas estrictas de separación — ver documentación de arquitectura. Los commits usan estilo conventional commit (`feat:`, `fix:`, `chore:`, etc.).
+This project follows strict separation rules — see architecture documentation. Commits use conventional commit style (`feat:`, `fix:`, `chore:`, etc.).
 
-## Licencia
+## License
 
-Por determinar.
+To be determined.
