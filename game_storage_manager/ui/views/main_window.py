@@ -457,7 +457,10 @@ class MainWindow(QMainWindow):
             self._games_table.insertRow(row)
 
             root_path = analysis.root_path
-            compressed_assets = f"{analysis.already_compressed_file_count} ext / {analysis.ntfs_compressed_file_count} NTFS"
+            compressed_assets = (
+                f"{analysis.already_compressed_file_count} ext / "
+                f"{analysis.ntfs_compressed_file_count} NTFS"
+            )
 
             source = GameSource.Manual
             for g in self._library_games:
@@ -716,7 +719,10 @@ class MainWindow(QMainWindow):
             engine = RecommendationEngine()
             rec = engine.recommend_with_algorithm(analysis, self._current_algorithm)
 
-            compressed_assets = f"{analysis.already_compressed_file_count} ext / {analysis.ntfs_compressed_file_count} NTFS"
+            compressed_assets = (
+                f"{analysis.already_compressed_file_count} ext / "
+                f"{analysis.ntfs_compressed_file_count} NTFS"
+            )
             path = analysis.root_path
 
             source = GameSource.Manual
