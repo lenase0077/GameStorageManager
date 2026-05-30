@@ -107,6 +107,8 @@ class _AsyncWatcher(QObject):
 
 
 class MainWindow(QMainWindow):
+    progress_changed = Signal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._selected_folder = ""
@@ -130,6 +132,7 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._apply_theme()
         self._connect_signals()
+        self.progress_changed.connect(self._progress_bar.setValue)
         self._set_busy(False)
         self._load_library()
 
@@ -962,7 +965,7 @@ class MainWindow(QMainWindow):
             self._update_row_status(self._active_row, "Optimizing")
 
         def on_progress(lines_processed: int):
-            QTimer.singleShot(0, lambda v=lines_processed: self._progress_bar.setValue(v))
+            self.progress_changed.emit(lines_processed)
 
         future = self._compression_controller.compress(analysis, recommendation, on_progress)
         self._compress_watcher = _AsyncWatcher(future, self)
@@ -1033,7 +1036,7 @@ class MainWindow(QMainWindow):
         metadata.root_path = self._active_analysis.root_path
 
         def on_progress(lines_processed: int):
-            QTimer.singleShot(0, lambda v=lines_processed: self._progress_bar.setValue(v))
+            self.progress_changed.emit(lines_processed)
 
         future = self._compression_controller.restore(metadata, on_progress)
         self._restore_watcher = _AsyncWatcher(future, self)

@@ -1,5 +1,7 @@
 # Game Storage Manager
 
+![Game Storage Manager screenshot](docs/screenshot.png)
+
 > Automatically optimize your game library without compromising performance.
 
 **Game Storage Manager** is a Windows desktop tool that reclaims disk space from your installed games using NTFS compression — safe, transparent, and always reversible.
